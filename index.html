@@ -392,7 +392,7 @@ async function loadFirebaseUpdates() {
   try {
     const snap = await db.collection('updates').get();
     snap.forEach(doc => {
-      const code = doc.id;
+      const code = doc.id.replace(/_/g, '/');
       const update = doc.data();
       if (!state.data[code]) {
         state.data[code] = { cnae: code, denominacao: '', atividades: [], obs: '' };
@@ -413,7 +413,8 @@ async function saveUpdateToFirebase(code) {
   if (cur.obs !== base.obs) diff.obs = cur.obs;
   if (JSON.stringify(cur.atividades) !== JSON.stringify(base.atividades)) diff.atividades = cur.atividades;
   try {
-    const ref = db.collection('updates').doc(code);
+    const docId = code.replace(/\//g, '_');
+    const ref = db.collection('updates').doc(docId);
     if (Object.keys(diff).length) {
       await ref.set(diff);
     } else {

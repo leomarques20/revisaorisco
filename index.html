@@ -68,6 +68,7 @@
     .icon{ width: 16px; height: 16px; stroke-width: 2.5; }
     #auth-container { margin-left: auto; display: flex; align-items: center; gap: 8px; }
     #user-info { font-weight: 500; font-size: 13px; color: rgba(var(--muted-rgb), 1); }
+    #btnAdmin { display: none; } /* Hidden by default */
     
     .panel{ padding:20px; }
     #dashboard{ grid-column: 1 / 2; display:flex; flex-direction:column; gap:16px; }
@@ -133,6 +134,11 @@
     .act{ display:grid; grid-template-columns: 1fr 1fr 1fr 110px 40px; gap:8px; align-items:center; margin-top:8px; }
     .act small{ opacity:.7 } .divider{ height:1px; background: rgba(var(--border), .12); margin:16px 0 } .small{ font-size:12px; font-weight: 500; }
     
+    /* Admin Modal Styles */
+    #adminUsersTable { width: 100%; margin-top: 16px; border-collapse: collapse; }
+    #adminUsersTable th, #adminUsersTable td { padding: 8px 12px; border-bottom: 1px solid rgba(var(--border), .1); text-align: left; }
+    #adminUsersTable td input, #adminUsersTable td select { padding: 6px 8px; }
+    
     #toast{ position:fixed; bottom:-100px; left:50%; transform:translateX(-50%); background:rgb(var(--fg)); color:rgb(var(--bg)); padding:12px 18px; border-radius:12px; box-shadow: var(--shadow-2); opacity:0; transition:all .4s cubic-bezier(0.22, 1, 0.36, 1); font-weight: 600; z-index: 999; }
     #toast.show{ bottom: 32px; opacity: 1; }
     
@@ -159,6 +165,7 @@
     <button id="btnTheme" class="btn" title="Alternar tema"><span id="themeIcon"></span> <span id="themeLabel">—</span></button>
     
     <div id="auth-container">
+        <button id="btnAdmin" class="btn">Gerenciar Usuários</button>
         <span id="user-info"></span>
         <button id="auth-btn" class="btn primary">Acessar</button>
     </div>
@@ -235,7 +242,6 @@
   </div>
 </div>
 
-
   <dialog id="dlg">
     <div class="modal">
       <header class="row" style="justify-content:space-between; align-items:center">
@@ -270,17 +276,41 @@
       </div>
     </div>
   </dialog>
+  
+  <dialog id="admin-dlg">
+    <div class="modal">
+        <header class="row" style="justify-content:space-between; align-items:center">
+            <h2 style="margin:0; font-size:18px">Gerenciar Permissões de Usuários</h2>
+            <button id="btnCloseAdmin" class="btn"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+        </header>
+        <div class="content">
+            <p class="notice">Adicione, edite ou remova as permissões de usuários. As alterações são salvas automaticamente.</p>
+            <table id="adminUsersTable">
+                <thead><tr><th>Email</th><th>Permissão</th><th>Ações</th></tr></thead>
+                <tbody id="adminUsersTbody"></tbody>
+            </table>
+            <div class="divider"></div>
+            <h3 style="margin-top:0;">Adicionar Novo Usuário</h3>
+            <div class="row">
+                <input id="new-user-email" type="email" placeholder="email@exemplo.com" style="flex:2">
+                <select id="new-user-role" style="flex:1">
+                    <option value="editor">Editor</option>
+                    <option value="admin">Admin</option>
+                </select>
+                <button id="btnAddUser" class="btn primary">Adicionar</button>
+            </div>
+        </div>
+    </div>
+  </dialog>
 
   <div id="toast"></div>
 
 <!-- ======================= FIREBASE SETUP ======================= -->
 <script type="module">
-  // Import the functions you need from the SDKs
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-  // Your web app's Firebase configuration
   const firebaseConfig = {
     apiKey: "AIzaSyCm9vOZBbAC3afVJqV15JDt4mQHmXsvQ4M",
     authDomain: "risco-11109.firebaseapp.com",
@@ -291,13 +321,11 @@
     measurementId: "G-64VQS2PPBK"
   };
 
-  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
   const provider = new GoogleAuthProvider();
 
-  // Expose functions to the global window object
   window.firebase = {
       db,
       auth,
@@ -307,6 +335,7 @@
       setDoc,
       getDocs,
       getDoc,
+      deleteDoc,
       signInWithPopup,
       signOut,
       onAuthStateChanged
@@ -340,21 +369,8 @@ async function tryFetchJSON(url){
 const areSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
 
 /* ======= Tema (claro/escuro) ======= */
-const themeIcons = {
-  dark: `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`,
-  light: `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
-};
-function applyTheme(theme){
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('visa_theme', theme);
-  setText('#themeLabel', theme==='dark' ? 'Escuro' : 'Claro');
-  setHtml('#themeIcon', themeIcons[theme]);
-}
-function initTheme(){
-  const saved = localStorage.getItem('visa_theme');
-  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  applyTheme(saved || (prefersDark ? 'dark' : 'light'));
-}
+// ... (código do tema omitido para brevidade, continua o mesmo)
+function applyTheme(theme){ document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('visa_theme', theme); setText('#themeLabel', theme==='dark' ? 'Escuro' : 'Claro'); setHtml('#themeIcon', theme==='dark' ? `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>` : `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`); } function initTheme(){ const saved = localStorage.getItem('visa_theme'); const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; applyTheme(saved || (prefersDark ? 'dark' : 'light')); }
 
 /* CNAE <-> subclasse id (IBGE) */
 function cnaeToSubclassDigits(cnae){ return (cnae||'').replace(/[^0-9]/g,''); }
@@ -362,21 +378,12 @@ function subclassDigitsToCNAE(id){ const s=String(id||'').padStart(7,'0'); retur
 
 /* ======= Estado ======= */
 const state = { 
-    data: {}, 
-    base: {}, 
-    augmentedBase: {}, 
-    concla: new Map(), 
-    filter: { 
-        q:'', 
-        nivel: '', 
-        diretoria: ''
-    }, 
-    edited: null,
-    user: null,
-    isAuthorized: false
+    data: {}, base: {}, augmentedBase: {}, concla: new Map(), 
+    filter: { q:'', nivel: '', diretoria: '' }, 
+    edited: null, user: null, isAuthorized: false, isAdmin: false
 };
 
-/* ======= Firebase & Auth ======= */
+/* ======= Firebase & Auth & Admin ======= */
 function encodeCnaeForFirebase(cnae) { return cnae.replace('/', '_'); }
 function decodeCnaeFromFirebase(docId) { return docId.replace('_', '/'); }
 
@@ -394,47 +401,49 @@ function setupFirebase() {
 }
 
 async function checkUserAuthorization(user) {
-    if (!user) {
-        return false;
-    }
+    if (!user || !user.email) return { authorized: false, admin: false };
     try {
-        const roleDocRef = window.firebase.doc(fbRolesCollectionRef, user.uid);
+        const roleDocRef = window.firebase.doc(fbRolesCollectionRef, user.email);
         const docSnap = await window.firebase.getDoc(roleDocRef);
         if (docSnap.exists()) {
             const role = docSnap.data().role;
-            return ['editor', 'admin'].includes(role);
+            const authorized = ['editor', 'admin'].includes(role);
+            const admin = role === 'admin';
+            return { authorized, admin };
         }
-        return false;
     } catch (error) {
         console.error("Error checking user role:", error);
-        return false;
     }
+    return { authorized: false, admin: false };
 }
 
 async function updateUIForAuthState(user) {
     state.user = user;
-    const authBtn = $('#auth-btn');
-    const userInfo = $('#user-info');
+    const { authorized, admin } = await checkUserAuthorization(user);
+    state.isAuthorized = authorized;
+    state.isAdmin = admin;
+
+    const authBtn = $('#auth-btn'), userInfo = $('#user-info'), btnAdmin = $('#btnAdmin');
     const writeActions = $$('.write-action');
     
     if (user) {
-        state.isAuthorized = await checkUserAuthorization(user);
-        if (state.isAuthorized) {
-            setText(authBtn, 'Sair');
+        setText(authBtn, 'Sair');
+        if (authorized) {
             setText(userInfo, `Olá, ${user.displayName.split(' ')[0]}`);
             writeActions.forEach(el => el.removeAttribute('disabled'));
             toast('Acesso autorizado. Funcionalidades de edição liberadas.');
+            if (admin) {
+                btnAdmin.style.display = 'inline-flex';
+            }
         } else {
-            setText(authBtn, 'Sair');
             setText(userInfo, `${user.displayName.split(' ')[0]} (somente leitura)`);
-            writeActions.forEach(el => el.setAttribute('disabled', 'true'));
             toast('Usuário sem permissão para editar.');
         }
     } else {
-        state.isAuthorized = false;
         setText(authBtn, 'Acessar');
         setText(userInfo, '');
         writeActions.forEach(el => el.setAttribute('disabled', 'true'));
+        btnAdmin.style.display = 'none';
     }
 }
 
@@ -503,7 +512,114 @@ async function loadOverridesFromFirebase() {
     }
 }
 
+// ... (Restante das funções, como normalizeRevisado, normalizeBase, IBGE, summarize, renderTable, etc., continuam iguais)
+// ... O código foi omitido aqui para não repetir tudo, mas ele deve ser mantido no seu arquivo.
+// A seguir, adicionamos as novas funções do Modal de Admin.
 
+/* ======= Admin Modal Functions ======= */
+async function openAdminModal() {
+    if (!state.isAdmin) return;
+    const dlg = $('#admin-dlg');
+    if (dlg) {
+        await renderAdminUserList();
+        dlg.showModal();
+    }
+}
+
+async function renderAdminUserList() {
+    const tbody = $('#adminUsersTbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="3">Carregando...</td></tr>';
+    
+    try {
+        const querySnapshot = await window.firebase.getDocs(fbRolesCollectionRef);
+        tbody.innerHTML = '';
+        if (querySnapshot.empty) {
+            tbody.innerHTML = '<tr><td colspan="3">Nenhum usuário com permissão.</td></tr>';
+        }
+        querySnapshot.forEach(doc => {
+            const email = doc.id;
+            const role = doc.data().role;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${escapeHtml(email)}</td>
+                <td>
+                    <select data-email="${escapeHtml(email)}">
+                        <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+                        <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </td>
+                <td><button class="btn danger" data-email="${escapeHtml(email)}">Remover</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error("Failed to load roles:", error);
+        tbody.innerHTML = '<tr><td colspan="3" class="danger">Falha ao carregar permissões.</td></tr>';
+    }
+}
+
+async function updateUserRole(email, newRole) {
+    try {
+        const docRef = window.firebase.doc(fbRolesCollectionRef, email);
+        await window.firebase.setDoc(docRef, { role: newRole });
+        toast(`Permissão de ${email} atualizada para ${newRole}.`);
+    } catch (e) {
+        toast(`Erro ao atualizar permissão: ${e.message}`);
+    }
+}
+
+async function removeUserRole(email) {
+    if (!confirm(`Tem certeza que deseja remover as permissões de ${email}?`)) return;
+    try {
+        const docRef = window.firebase.doc(fbRolesCollectionRef, email);
+        await window.firebase.deleteDoc(docRef);
+        toast(`Permissões de ${email} removidas.`);
+        await renderAdminUserList();
+    } catch (e) {
+        toast(`Erro ao remover permissão: ${e.message}`);
+    }
+}
+
+async function addNewUserRole() {
+    const emailInput = $('#new-user-email');
+    const roleSelect = $('#new-user-role');
+    const email = emailInput.value.trim().toLowerCase();
+    const role = roleSelect.value;
+    
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+        return alert("Por favor, insira um e-mail válido.");
+    }
+    
+    try {
+        await updateUserRole(email, role);
+        emailInput.value = '';
+        await renderAdminUserList();
+    } catch (e) {
+        console.error("Failed to add user:", e);
+    }
+}
+
+function wireAdminEvents() {
+    $('#btnAdmin').onclick = openAdminModal;
+    $('#btnCloseAdmin').onclick = () => $('#admin-dlg').close();
+    $('#btnAddUser').onclick = addNewUserRole;
+    
+    $('#adminUsersTbody').addEventListener('change', (e) => {
+        if (e.target.tagName === 'SELECT') {
+            const email = e.target.dataset.email;
+            const newRole = e.target.value;
+            updateUserRole(email, newRole);
+        }
+    });
+
+    $('#adminUsersTbody').addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') {
+            const email = e.target.dataset.email;
+            removeUserRole(email);
+        }
+    });
+}
 /* ======= Importadores / Normalizadores ======= */
 function normalizeRevisado(json){
   const out={};
@@ -742,7 +858,7 @@ function openEdit(code){
   const d1=$('#dlgDenom'), d2=$('#dlgObs'); if(d1) d1.value = e.denominacao||''; if(d2) d2.value=e.obs||'';
   renderActs(e);
   // Re-check auth state for modal buttons
-  $$('.write-action').forEach(el => state.isAuthorized ? el.removeAttribute('disabled') : el.setAttribute('disabled', 'true'));
+  $$('#dlg .write-action').forEach(el => state.isAuthorized ? el.removeAttribute('disabled') : el.setAttribute('disabled', 'true'));
   const dlg=$('#dlg'); if(dlg && dlg.showModal) dlg.showModal();
 }
 function closeEdit(){ const dlg=$('#dlg'); if(dlg) dlg.close(); state.edited=null; }
@@ -928,7 +1044,8 @@ async function autoInit(){
 
 function init(){ 
   initTheme(); 
-  wireEvents(); 
+  wireEvents();
+  wireAdminEvents();
   autoInit(); 
 }
 

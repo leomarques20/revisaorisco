@@ -360,7 +360,15 @@ const state = {
     edited: null 
 };
 
-/* ======= Firebase Integration ======= */
+/* ======= Firebase Helpers (CORREÇÃO APLICADA AQUI) ======= */
+// Helper functions to handle the '/' in CNAE codes for Firebase document IDs
+function encodeCnaeForFirebase(cnae) {
+    return cnae.replace('/', '_');
+}
+function decodeCnaeFromFirebase(docId) {
+    return docId.replace('_', '/');
+}
+
 let fbCollectionRef = null;
 function setupFirebase() {
     if (window.firebase) {
@@ -378,18 +386,18 @@ async function saveCnaeToFirebase(cnaeCode) {
         const entry = state.data[cnaeCode];
         if (!entry) return;
         
-        // Create a clean object to save, removing any temporary flags
         const dataToSave = JSON.parse(JSON.stringify(entry));
         delete dataToSave._isUserModified;
 
-        const docRef = window.firebase.doc(fbCollectionRef, cnaeCode);
+        // Use the encoded CNAE as the document ID
+        const docId = encodeCnaeForFirebase(cnaeCode);
+        const docRef = window.firebase.doc(fbCollectionRef, docId);
         await window.firebase.setDoc(docRef, dataToSave);
         
-        // Mark as modified in the current session
         state.data[cnaeCode]._isUserModified = true;
         
         toast(`CNAE ${cnaeCode} salvo na nuvem.`);
-        refresh(); // Re-render to show visual feedback if any
+        refresh();
     } catch (error) {
         console.error("Error saving to Firebase:", error);
         alert("Erro ao salvar na nuvem: " + error.message);
@@ -403,9 +411,10 @@ async function loadOverridesFromFirebase() {
         const querySnapshot = await window.firebase.getDocs(fbCollectionRef);
         let count = 0;
         querySnapshot.forEach((doc) => {
-            const cnaeCode = doc.id;
+            // Decode the document ID to get the original CNAE code
+            const cnaeCode = decodeCnaeFromFirebase(doc.id);
             const data = doc.data();
-            data._isUserModified = true; // Flag to indicate it came from user edits
+            data._isUserModified = true;
             state.data[cnaeCode] = data;
             count++;
         });
@@ -748,8 +757,7 @@ function wireEvents(){
           if (!state.data[code]) {
             state.data[code] = { cnae: code, denominacao: obj.descricao, atividades: [{ diretoria: '', condicionante_risco: '', tipologia: '', nivel_de_risco: 'I' }], obs: '' };
             addData++;
-          } else if (obj.descricao && !state.data[code]._isUserModified) { // <-- MODIFICATION HERE
-             // Only update description if it hasn't been modified by the user
+          } else if (obj.descricao && !state.data[code]._isUserModified) {
              state.data[code].denominacao = obj.descricao;
           }
 
@@ -797,7 +805,6 @@ function buildRelatorio(){
 
 /* ======= Boot ======= */
 async function autoInit(){
-  // Initialize Firebase connection
   if (!setupFirebase()) {
       alert("Falha ao inicializar a conexão com o banco de dados. As alterações não serão salvas na nuvem.");
   }
@@ -830,7 +837,6 @@ async function autoInit(){
     toast('Base Vigente copiada para a área de trabalho.');
   }
 
-  // Load overrides from Firebase after loading local files
   await loadOverridesFromFirebase();
 
   if (Object.keys(state.data).length > 0 || Object.keys(state.base).length > 0) {

@@ -58,13 +58,16 @@
       border:1px solid rgba(var(--border), .12); transition: all .15s ease; box-shadow: var(--shadow-1);
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     }
-    button:hover{ transform: translateY(-1px); background: rgba(var(--border), .1); border-color: rgba(var(--border), .18); box-shadow: 0 6px 16px rgba(0,0,0,.2); }
-    button:active{ transform: translateY(0); }
+    .btn:disabled, button:disabled { cursor: not-allowed !important; opacity: 0.5; transform: none !important; box-shadow: var(--shadow-1) !important; }
+    .btn:hover:not(:disabled), button:hover:not(:disabled) { transform: translateY(-1px); background: rgba(var(--border), .1); border-color: rgba(var(--border), .18); box-shadow: 0 6px 16px rgba(0,0,0,.2); }
+    .btn:active:not(:disabled), button:active:not(:disabled) { transform: translateY(0); }
     button.primary{ background: rgb(var(--primary)); color:#fff; border-color: transparent; }
-    button.primary:hover{ background: rgb(var(--primary)); filter: brightness(1.1); }
+    button.primary:hover:not(:disabled) { background: rgb(var(--primary)); filter: brightness(1.1); }
     input[type="file"]{ display:none; }
     .sep{ width:1px; height:28px; background: rgba(var(--border), .16); margin:0 8px; }
     .icon{ width: 16px; height: 16px; stroke-width: 2.5; }
+    #auth-container { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    #user-info { font-weight: 500; font-size: 13px; color: rgba(var(--muted-rgb), 1); }
     
     .panel{ padding:20px; }
     #dashboard{ grid-column: 1 / 2; display:flex; flex-direction:column; gap:16px; }
@@ -145,8 +148,8 @@
   </header>
 
   <div class="toolbar glass">
-    <label class="btn"><input id="fileBase" type="file" accept="application/json" /><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Importar Vigente</label>
-    <label class="btn"><input id="fileRevisado" type="file" accept="application/json" /><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Importar Revisada</label>
+    <label class="btn write-action"><input id="fileBase" type="file" accept="application/json" /><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Importar Vigente</label>
+    <label class="btn write-action"><input id="fileRevisado" type="file" accept="application/json" /><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Importar Revisada</label>
     <span class="sep"></span>
     <button id="btnSyncIBGE" class="btn"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>Sincronizar CONCLA</button>
     <span class="sep"></span>
@@ -154,6 +157,11 @@
     <button id="btnExportExcel" class="btn"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>Exportar Excel</button>
     <span class="sep"></span>
     <button id="btnTheme" class="btn" title="Alternar tema"><span id="themeIcon"></span> <span id="themeLabel">—</span></button>
+    
+    <div id="auth-container">
+        <span id="user-info"></span>
+        <button id="auth-btn" class="btn primary">Acessar</button>
+    </div>
   </div>
 
 <div class="main-grid">
@@ -252,13 +260,13 @@
         <div class="divider"></div>
         <div class="row" style="justify-content:space-between; align-items:center">
           <h3 style="margin:0">Atividades (Condicionantes)</h3>
-          <button id="btnAddAct" class="btn"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Adicionar</button>
+          <button id="btnAddAct" class="btn write-action"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Adicionar</button>
         </div>
         <div id="acts"></div>
       </div>
       <div class="row" style="justify-content:space-between; align-items:center; padding:16px 24px; border-top:1px solid rgba(var(--border), .12); background: rgba(var(--table-head-bg), .5)">
         <div class="small muted">O risco agregado mostra <strong>todos os níveis presentes</strong> (ex.: I/II/III) quando o CNAE possui mais de um risco possível.</div>
-        <div class="row"><button id="btnSave" class="btn primary"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>Salvar Alterações</button></div>
+        <div class="row"><button id="btnSave" class="btn primary write-action"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>Salvar Alterações</button></div>
       </div>
     </div>
   </dialog>
@@ -269,9 +277,8 @@
 <script type="module">
   // Import the functions you need from the SDKs
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  // The Analytics SDK is optional
-  // import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   // Your web app's Firebase configuration
   const firebaseConfig = {
@@ -286,16 +293,23 @@
 
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
-  // const analytics = getAnalytics(app);
   const db = getFirestore(app);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
 
-  // Expose functions to the global window object so the main script can use them
+  // Expose functions to the global window object
   window.firebase = {
       db,
+      auth,
+      provider,
       collection,
       doc,
       setDoc,
-      getDocs
+      getDocs,
+      getDoc,
+      signInWithPopup,
+      signOut,
+      onAuthStateChanged
   };
 </script>
 
@@ -357,31 +371,93 @@ const state = {
         nivel: '', 
         diretoria: ''
     }, 
-    edited: null 
+    edited: null,
+    user: null,
+    isAuthorized: false
 };
 
-/* ======= Firebase Helpers (CORREÇÃO APLICADA AQUI) ======= */
-// Helper functions to handle the '/' in CNAE codes for Firebase document IDs
-function encodeCnaeForFirebase(cnae) {
-    return cnae.replace('/', '_');
-}
-function decodeCnaeFromFirebase(docId) {
-    return docId.replace('_', '/');
-}
+/* ======= Firebase & Auth ======= */
+function encodeCnaeForFirebase(cnae) { return cnae.replace('/', '_'); }
+function decodeCnaeFromFirebase(docId) { return docId.replace('_', '/'); }
 
 let fbCollectionRef = null;
+let fbRolesCollectionRef = null;
+
 function setupFirebase() {
     if (window.firebase) {
         fbCollectionRef = window.firebase.collection(window.firebase.db, 'cnae_overrides');
-        console.log("Firebase initialized successfully.");
+        fbRolesCollectionRef = window.firebase.collection(window.firebase.db, 'roles');
+        setupAuthListener();
         return true;
     }
-    console.error("Firebase not available on window object.");
     return false;
 }
 
+async function checkUserAuthorization(user) {
+    if (!user) {
+        return false;
+    }
+    try {
+        const roleDocRef = window.firebase.doc(fbRolesCollectionRef, user.uid);
+        const docSnap = await window.firebase.getDoc(roleDocRef);
+        if (docSnap.exists()) {
+            const role = docSnap.data().role;
+            return ['editor', 'admin'].includes(role);
+        }
+        return false;
+    } catch (error) {
+        console.error("Error checking user role:", error);
+        return false;
+    }
+}
+
+async function updateUIForAuthState(user) {
+    state.user = user;
+    const authBtn = $('#auth-btn');
+    const userInfo = $('#user-info');
+    const writeActions = $$('.write-action');
+    
+    if (user) {
+        state.isAuthorized = await checkUserAuthorization(user);
+        if (state.isAuthorized) {
+            setText(authBtn, 'Sair');
+            setText(userInfo, `Olá, ${user.displayName.split(' ')[0]}`);
+            writeActions.forEach(el => el.removeAttribute('disabled'));
+            toast('Acesso autorizado. Funcionalidades de edição liberadas.');
+        } else {
+            setText(authBtn, 'Sair');
+            setText(userInfo, `${user.displayName.split(' ')[0]} (somente leitura)`);
+            writeActions.forEach(el => el.setAttribute('disabled', 'true'));
+            toast('Usuário sem permissão para editar.');
+        }
+    } else {
+        state.isAuthorized = false;
+        setText(authBtn, 'Acessar');
+        setText(userInfo, '');
+        writeActions.forEach(el => el.setAttribute('disabled', 'true'));
+    }
+}
+
+function setupAuthListener() {
+    window.firebase.onAuthStateChanged(window.firebase.auth, (user) => {
+        updateUIForAuthState(user);
+    });
+}
+
+function handleAuthClick() {
+    if (state.user) {
+        window.firebase.signOut(window.firebase.auth);
+    } else {
+        window.firebase.signInWithPopup(window.firebase.auth, window.firebase.provider)
+            .catch(error => console.error("Login failed:", error));
+    }
+}
+
 async function saveCnaeToFirebase(cnaeCode) {
-    if (!fbCollectionRef) return;
+    if (!fbCollectionRef || !state.isAuthorized) {
+        toast('Ação não permitida. Faça login com um usuário autorizado.');
+        return;
+    }
     try {
         const entry = state.data[cnaeCode];
         if (!entry) return;
@@ -389,7 +465,6 @@ async function saveCnaeToFirebase(cnaeCode) {
         const dataToSave = JSON.parse(JSON.stringify(entry));
         delete dataToSave._isUserModified;
 
-        // Use the encoded CNAE as the document ID
         const docId = encodeCnaeForFirebase(cnaeCode);
         const docRef = window.firebase.doc(fbCollectionRef, docId);
         await window.firebase.setDoc(docRef, dataToSave);
@@ -411,7 +486,6 @@ async function loadOverridesFromFirebase() {
         const querySnapshot = await window.firebase.getDocs(fbCollectionRef);
         let count = 0;
         querySnapshot.forEach((doc) => {
-            // Decode the document ID to get the original CNAE code
             const cnaeCode = decodeCnaeFromFirebase(doc.id);
             const data = doc.data();
             data._isUserModified = true;
@@ -667,6 +741,8 @@ function openEdit(code){
   if(riskEl){ riskEl.className='pill '+(aggr==='I'?'lvl-1':aggr==='II'?'lvl-2':aggr==='III'?'lvl-3':'lvl-p'); riskEl.textContent=aggr; }
   const d1=$('#dlgDenom'), d2=$('#dlgObs'); if(d1) d1.value = e.denominacao||''; if(d2) d2.value=e.obs||'';
   renderActs(e);
+  // Re-check auth state for modal buttons
+  $$('.write-action').forEach(el => state.isAuthorized ? el.removeAttribute('disabled') : el.setAttribute('disabled', 'true'));
   const dlg=$('#dlg'); if(dlg && dlg.showModal) dlg.showModal();
 }
 function closeEdit(){ const dlg=$('#dlg'); if(dlg) dlg.close(); state.edited=null; }
@@ -682,7 +758,7 @@ function actRow(entry,a,idx){
     <option ${a.nivel_de_risco==='II'?'selected':''}>II</option>
     <option ${a.nivel_de_risco==='III'?'selected':''}>III</option>
   </select>
-  <button class="btn" title="Remover"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`;
+  <button class="btn write-action" title="Remover"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`;
   const [dir,cond,tip,sel,btn]=row.querySelectorAll('input,select,button');
   if(dir) dir.oninput=()=> a.diretoria=dir.value;
   if(cond) cond.oninput=()=> a.condicionante_risco=cond.value;
@@ -705,6 +781,7 @@ function wireEvents(){
   const readFileAsJSON = async (file)=>{ const txt = await file.text(); try{ return JSON.parse(txt); }catch(e){ alert('Erro: Arquivo JSON inválido. Verifique o console para detalhes.'); console.error(e); return null; } };
   $('#fileRevisado').addEventListener('change', async ev=>{ const f=ev.target.files[0]; if(!f) return; const json=await readFileAsJSON(f); if(!json) return; state.data = normalizeRevisado(json); await $('#btnSyncIBGE').click(); toast('Base Revisada importada e sincronizada.'); });
   $('#fileBase').addEventListener('change', async ev=>{ const f=ev.target.files[0]; if(!f) return; const json=await readFileAsJSON(f); if(!json) return; state.base = normalizeBase(json); await $('#btnSyncIBGE').click(); toast('Base Vigente importada e sincronizada.'); });
+  $('#auth-btn').onclick = handleAuthClick;
 
   $('#btnExportJson').onclick=()=>{ const out={}; for(const [code,e] of Object.entries(state.data)){ out[code] = { denominacao: e.denominacao||'', atividades: (e.atividades||[]).map(a=>({ diretoria:a.diretoria||'', condicionante_risco:a.condicionante_risco||'', tipologia:a.tipologia||'', nivel_de_risco:a.nivel_de_risco||'I' })), observacao: e.obs||'' }; } const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='classificacao_revisada_export.json'; a.click(); };
   $('#btnExportExcel').onclick=()=>{
@@ -806,7 +883,7 @@ function buildRelatorio(){
 /* ======= Boot ======= */
 async function autoInit(){
   if (!setupFirebase()) {
-      alert("Falha ao inicializar a conexão com o banco de dados. As alterações não serão salvas na nuvem.");
+      alert("Falha ao inicializar a conexão com o banco de dados.");
   }
   
   const basePromise = tryFetchJSON('cnae.json');

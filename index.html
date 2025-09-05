@@ -11,6 +11,7 @@
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <style>
     :root{
       --bg: 18,18,22; --fg: 245,245,248; --muted-rgb: 160,168,185; --primary: 72,149,239;
@@ -386,11 +387,14 @@ const firebaseConfig = {
   measurementId: "G-64VQS2PPBK"
 };
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.firestore();
+let uid = null;
 
 async function loadFirebaseUpdates() {
+  if (!uid) return;
   try {
-    const snap = await db.collection('updates').get();
+    const snap = await db.collection('users').doc(uid).collection('updates').get();
     snap.forEach(doc => {
       const code = doc.id.replace(/_/g, '/');
       const update = doc.data();
@@ -405,6 +409,7 @@ async function loadFirebaseUpdates() {
 }
 
 async function saveUpdateToFirebase(code) {
+  if (!uid) return;
   const baseRef = Object.keys(state.augmentedBase).length ? state.augmentedBase : state.base;
   const base = baseRef[code] || {};
   const cur = state.data[code];
@@ -413,8 +418,8 @@ async function saveUpdateToFirebase(code) {
   if (cur.obs !== base.obs) diff.obs = cur.obs;
   if (JSON.stringify(cur.atividades) !== JSON.stringify(base.atividades)) diff.atividades = cur.atividades;
   try {
-    const docId = code.replace(/\//g, '_');
-    const ref = db.collection('updates').doc(docId);
+    const docId = code.replaceAll('/', '_');
+    const ref = db.collection('users').doc(uid).collection('updates').doc(docId);
     if (Object.keys(diff).length) {
       await ref.set(diff);
     } else {
@@ -800,10 +805,16 @@ async function autoInit(){
     refresh();
   }
 
-function init(){ 
-  initTheme(); 
-  wireEvents(); 
-  autoInit(); 
+async function init(){
+  initTheme();
+  wireEvents();
+  try {
+    const cred = await auth.signInAnonymously();
+    uid = cred.user.uid;
+  } catch (err) {
+    console.error('Erro de autenticação', err);
+  }
+  autoInit();
 }
 
 if(document.readyState === 'loading'){ 

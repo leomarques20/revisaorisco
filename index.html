@@ -391,12 +391,19 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 let uid = null;
 
+function sanitizeCode(code){
+  return String(code||'').replace(/[\/]/g, '_');
+}
+function unsanitizeCode(id){
+  return id.replace(/_/g, '/');
+}
+
 async function loadFirebaseUpdates() {
   if (!uid) return;
   try {
     const snap = await db.collection('users').doc(uid).collection('updates').get();
     snap.forEach(doc => {
-      const code = doc.id.replace(/_/g, '/');
+      const code = unsanitizeCode(doc.id);
       const update = doc.data();
       if (!state.data[code]) {
         state.data[code] = { cnae: code, denominacao: '', atividades: [], obs: '' };
@@ -405,6 +412,7 @@ async function loadFirebaseUpdates() {
     });
   } catch (err) {
     console.error('Erro ao carregar Firebase', err);
+    toast('Não foi possível carregar alterações do Firebase.');
   }
 }
 
@@ -418,7 +426,7 @@ async function saveUpdateToFirebase(code) {
   if (cur.obs !== base.obs) diff.obs = cur.obs;
   if (JSON.stringify(cur.atividades) !== JSON.stringify(base.atividades)) diff.atividades = cur.atividades;
   try {
-    const docId = code.replaceAll('/', '_');
+    const docId = sanitizeCode(code);
     const ref = db.collection('users').doc(uid).collection('updates').doc(docId);
     if (Object.keys(diff).length) {
       await ref.set(diff);
@@ -427,6 +435,7 @@ async function saveUpdateToFirebase(code) {
     }
   } catch (err) {
     console.error('Erro ao salvar Firebase', err);
+    toast('Não foi possível salvar no Firebase.');
   }
 }
 

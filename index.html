@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <style>
     :root{
       --bg: 18,18,22; --fg: 245,245,248; --muted-rgb: 160,168,185; --primary: 72,149,239;
@@ -320,8 +323,35 @@ const state = {
         nivel: '', 
         diretoria: ''
     }, 
-    edited: null 
+    edited: null
 };
+
+/* ======= Firebase ======= */
+let db;
+let uid = null;
+function initFirebase(){
+  const firebaseConfig = window.firebaseConfig || {
+    // Firebase config
+  };
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  firebase.auth().signInAnonymously()
+    .then((cred)=>{
+      uid = cred.user.uid;
+      loadFirebaseUpdates();
+    })
+    .catch((err)=> console.error('Erro de autenticação Firebase', err));
+}
+async function loadFirebaseUpdates(){
+  if(!uid) return;
+  const snap = await db.collection('users').doc(uid).collection('updates').get();
+  snap.forEach(doc=>{ state.data[doc.id] = doc.data(); });
+  refresh();
+}
+async function saveUpdateToFirebase(code, data){
+  if(!uid) return;
+  await db.collection('users').doc(uid).collection('updates').doc(code).set(data);
+}
 
 /* ======= Importadores / Normalizadores ======= */
 function normalizeRevisado(json){
@@ -735,10 +765,11 @@ async function autoInit(){
   }
 }
 
-function init(){ 
-  initTheme(); 
-  wireEvents(); 
-  autoInit(); 
+function init(){
+  initTheme();
+  wireEvents();
+  initFirebase();
+  autoInit();
 }
 
 if(document.readyState === 'loading'){ 

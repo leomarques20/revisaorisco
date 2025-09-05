@@ -805,15 +805,25 @@ async function autoInit(){
     refresh();
   }
 
+async function authenticate(){
+  try {
+    if(window.firebaseAuth && window.firebaseAuth.email && window.firebaseAuth.password){
+      const cred = await auth.signInWithEmailAndPassword(window.firebaseAuth.email, window.firebaseAuth.password);
+      uid = cred.user.uid;
+    } else {
+      const cred = await auth.signInAnonymously();
+      uid = cred.user.uid;
+    }
+  } catch (err) {
+    console.error('Erro de autenticação', err);
+    toast('Não foi possível autenticar no Firebase.');
+  }
+}
+
 async function init(){
   initTheme();
   wireEvents();
-  try {
-    const cred = await auth.signInAnonymously();
-    uid = cred.user.uid;
-  } catch (err) {
-    console.error('Erro de autenticação', err);
-  }
+  await authenticate();
   autoInit();
 }
 

@@ -7,7 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <style>
     :root{
       --bg: 18,18,22; --fg: 245,245,248; --muted-rgb: 160,168,185; --primary: 72,149,239;
@@ -372,6 +376,69 @@ const IBGE = {
   async fetchAll(){ const r = await fetch(`${IBGE.base}/subclasses`); if(!r.ok) throw new Error('IBGE'); const arr = await r.json(); const m=new Map(); for(const s of arr){ m.set(String(s.id), { id:String(s.id), descricao:(s.descricao||s.titulo||'').trim() }); } return m; },
 };
 
+/* ======= Firebase ======= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCm9vOZBbAC3afVJqV15JDt4mQHmXsvQ4M",
+  authDomain: "risco-11109.firebaseapp.com",
+  projectId: "risco-11109",
+  storageBucket: "risco-11109.firebasestorage.app",
+  messagingSenderId: "752481693040",
+  appId: "1:752481693040:web:52128635aa0a10752ff3b5",
+  measurementId: "G-64VQS2PPBK"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+let uid = null;
+
+function sanitizeCode(code){
+  return String(code||'').replace(/[\/]/g, '_');
+}
+function unsanitizeCode(id){
+  return id.replace(/_/g, '/');
+}
+
+async function loadFirebaseUpdates() {
+  if (!uid) return;
+  try {
+    const snap = await db.collection('users').doc(uid).collection('updates').get();
+    snap.forEach(doc => {
+      const code = unsanitizeCode(doc.id);
+      const update = doc.data();
+      if (!state.data[code]) {
+        state.data[code] = { cnae: code, denominacao: '', atividades: [], obs: '' };
+      }
+      Object.assign(state.data[code], update);
+    });
+  } catch (err) {
+    console.error('Erro ao carregar Firebase', err);
+    toast('Não foi possível carregar alterações do Firebase.');
+  }
+}
+
+async function saveUpdateToFirebase(code) {
+  if (!uid) return;
+  const baseRef = Object.keys(state.augmentedBase).length ? state.augmentedBase : state.base;
+  const base = baseRef[code] || {};
+  const cur = state.data[code];
+  const diff = {};
+  if (cur.denominacao !== base.denominacao) diff.denominacao = cur.denominacao;
+  if (cur.obs !== base.obs) diff.obs = cur.obs;
+  if (JSON.stringify(cur.atividades) !== JSON.stringify(base.atividades)) diff.atividades = cur.atividades;
+  try {
+    const docId = sanitizeCode(code);
+    const ref = db.collection('users').doc(uid).collection('updates').doc(docId);
+    if (Object.keys(diff).length) {
+      await ref.set(diff);
+    } else {
+      await ref.delete();
+    }
+  } catch (err) {
+    console.error('Erro ao salvar Firebase', err);
+    toast('Não foi possível salvar no Firebase.');
+  }
+}
+
 /* ======= Regras de risco e inconsistências ======= */
 function aggregateRisk(ativs){
   const raw = (ativs||[]).map(a=> mapRoman[a?.nivel_de_risco] || '').filter(r=> r==='I' || r==='II' || r==='III');
@@ -589,7 +656,17 @@ function wireEvents(){
     applyTheme(cur==='dark' ? 'light' : 'dark');
   };
   $('#btnAddAct').onclick=()=>{ if(!state.edited) return; const e=state.data[state.edited]; e.atividades.push({diretoria:'',condicionante_risco:'',tipologia:'',nivel_de_risco:'I'}); renderActs(e); };
-  $('#btnSave').onclick=()=>{ const code=state.edited; if(!code) return; const e=state.data[code]; e.denominacao=$('#dlgDenom').value; e.obs=$('#dlgObs').value; closeEdit(); refresh(); toast('CNAE atualizado com sucesso.'); };
+  $('#btnSave').onclick = async () => {
+    const code = state.edited;
+    if (!code) return;
+    const e = state.data[code];
+    e.denominacao = $('#dlgDenom').value;
+    e.obs = $('#dlgObs').value;
+    closeEdit();
+    refresh();
+    await saveUpdateToFirebase(code);
+    toast('CNAE atualizado com sucesso.');
+  };
   $('#btnClose').onclick=closeEdit;
 
   const readFileAsJSON = async (file)=>{ const txt = await file.text(); try{ return JSON.parse(txt); }catch(e){ alert('Erro: Arquivo JSON inválido. Verifique o console para detalhes.'); console.error(e); return null; } };
@@ -698,7 +775,11 @@ async function autoInit(){
   if(typeof normalizeBase !== 'function'){ return setTimeout(autoInit, 50); }
   
   const basePromise = tryFetchJSON('cnae.json');
-  const revisadoPromise = tryFetchJSON('revisaorisco_atualizado_corrigido.json');
+  const revisadoPromise = (async () => {
+    let data = await tryFetchJSON('revisaorisco_atualizado_corrigido.json');
+    if (!data) data = await tryFetchJSON('revisaorisco_atualizado.json');
+    return data;
+  })();
 
   const [base, revisado] = await Promise.all([basePromise, revisadoPromise]);
   let baseLoaded = false;
@@ -714,10 +795,10 @@ async function autoInit(){
 
   if(revisado) {
     state.data = normalizeRevisado(revisado);
-    toast('Base Revisada (revisaorisco_atualizado_corrigido.json) carregada.');
+    toast('Base Revisada carregada.');
     revisadoLoaded = true;
   } else {
-    toast('Aviso: "revisaorisco_atualizado_corrigido.json" não encontrado ou com erro.');
+    toast('Aviso: arquivo de base revisada não encontrado ou com erro.');
   }
   
   if (!revisadoLoaded && baseLoaded) {
@@ -725,20 +806,38 @@ async function autoInit(){
     toast('Base Vigente copiada para a área de trabalho.');
   }
 
-  if (Object.keys(state.data).length > 0 || Object.keys(state.base).length > 0) {
-    const syncButton = $('#btnSyncIBGE');
-    if (syncButton) {
-        setTimeout(() => syncButton.click(), 500);
+    if (Object.keys(state.data).length > 0 || Object.keys(state.base).length > 0) {
+      const syncButton = $('#btnSyncIBGE');
+      if (syncButton) {
+        await syncButton.onclick();
+      }
+    } else {
+      refresh();
     }
-  } else {
+    await loadFirebaseUpdates();
     refresh();
+  }
+
+async function authenticate(){
+  try {
+    if(window.firebaseAuth && window.firebaseAuth.email && window.firebaseAuth.password){
+      const cred = await auth.signInWithEmailAndPassword(window.firebaseAuth.email, window.firebaseAuth.password);
+      uid = cred.user.uid;
+    } else {
+      const cred = await auth.signInAnonymously();
+      uid = cred.user.uid;
+    }
+  } catch (err) {
+    console.error('Erro de autenticação', err);
+    toast('Não foi possível autenticar no Firebase.');
   }
 }
 
-function init(){ 
-  initTheme(); 
-  wireEvents(); 
-  autoInit(); 
+async function init(){
+  initTheme();
+  wireEvents();
+  await authenticate();
+  autoInit();
 }
 
 if(document.readyState === 'loading'){ 

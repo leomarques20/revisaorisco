@@ -352,6 +352,93 @@ const setHtml = (sel, v)=>{ const el = (typeof sel==='string')? $(sel): sel; if(
 const toast = (m)=>{ const t=$('#toast'); if(!t) return; t.textContent=m; t.classList.add('show'); setTimeout(()=>{ t.classList.remove('show'); }, 2200); };
 const mapRoman = { '1':'I','2':'II','3':'III', 'I':'I','II':'II','III':'III' };
 const mapArab  = { 'I':1,'II':2,'III':3, '1':1,'2':2,'3':3 };
+const riskAliases = new Map([
+  ['0','I'],
+  ['0.0','I'],
+  ['NAO SUJEITO','I'],
+  ['NÃO SUJEITO','I'],
+  ['NAOSUJEITO','I'],
+  ['NAO_SUJEITO','I'],
+  ['NAO','I'],
+  ['NÃO','I'],
+  ['SEM RISCO','I'],
+]);
+const toStr = (value)=>{ if(value==null) return ''; return String(value).trim(); };
+const ensureArrayOfStrings = (value)=>{
+  if(Array.isArray(value)){
+    return value
+      .map(v=> typeof v === 'string' ? toStr(v) : v)
+      .filter(v=> {
+        if(v==null) return false;
+        if(typeof v === 'string') return v !== '';
+        return true;
+      });
+  }
+  if(value==null) return [];
+  if(typeof value === 'string'){ const str = toStr(value); return str? [str] : []; }
+  return [value];
+};
+const normalizeRiskLevel = (value)=>{
+  if(value==null) return 'I';
+  const raw = toStr(value);
+  if(!raw) return 'I';
+  const upper = raw.toUpperCase();
+  if(riskAliases.has(upper)) return riskAliases.get(upper);
+  if(mapRoman[raw]) return mapRoman[raw];
+  if(mapRoman[upper]) return mapRoman[upper];
+  const digits = upper.replace(/[^0-9]/g, '');
+  if(digits && mapRoman[digits]) return mapRoman[digits];
+  const roman = upper.replace(/[^IVX]/g, '');
+  if(roman && mapRoman[roman]) return mapRoman[roman];
+  return ['I','II','III'].includes(upper) ? upper : 'I';
+};
+function normalizeActivity(raw={}, context={}){
+  const diretoria = toStr(raw.diretoria ?? raw.Diretoria ?? context.diretoria);
+  const cond = toStr(raw.condicionante_risco ?? raw.condicionante ?? raw.Condicionantes ?? raw.condicionantes ?? context.condicionante_risco);
+  const tipologia = toStr(raw.tipologia ?? raw.Tipologia ?? context.tipologia);
+  const nivel = normalizeRiskLevel(raw.nivel_de_risco ?? raw.nivel ?? raw.risco ?? raw['Nível de Risco'] ?? context.nivel_de_risco);
+  return {
+    diretoria,
+    condicionante_risco: cond,
+    tipologia,
+    nivel_de_risco: nivel,
+    validado_por: ensureArrayOfStrings(raw.validado_por ?? context.validado_por),
+    atividade_sujeita: toStr(raw.atividade_sujeita ?? context.atividade_sujeita),
+    perigos_riscos: toStr(raw.perigos_riscos ?? context.perigos_riscos),
+    probabilidade_ocorrencia_sinistro: toStr(raw.probabilidade_ocorrencia_sinistro ?? context.probabilidade_ocorrencia_sinistro),
+    potencial_danoso_sinistro: toStr(raw.potencial_danoso_sinistro ?? context.potencial_danoso_sinistro),
+    matriz_risco: toStr(raw.matriz_risco ?? context.matriz_risco),
+    normas_boas_praticas: toStr(raw.normas_boas_praticas ?? context.normas_boas_praticas),
+    roteiro_inspecao: toStr(raw.roteiro_inspecao ?? context.roteiro_inspecao)
+  };
+}
+const createEmptyActivity = (overrides={})=> normalizeActivity({ ...overrides });
+const getFirst = (obj, keys=[], fallback='')=>{
+  if(!obj || typeof obj!=='object') return fallback;
+  for(const key of keys){ if(Object.prototype.hasOwnProperty.call(obj, key) && obj[key]!=null) return obj[key]; }
+  return fallback;
+};
+const normalizeEntry = (raw={}, fallbackCode='')=>{
+  const code = toStr(getFirst(raw, ['cnae','CNAE','codigo','Código'], fallbackCode));
+  if(!code) return null;
+  const entry = {
+    cnae: code,
+    denominacao: toStr(getFirst(raw, ['denominacao','denominação','Denominacao','Denominação','descricao','descrição','Descricao','Descrição'], '')),
+    atividades: [],
+    obs: toStr(getFirst(raw, ['obs','observacao','observação','Observacao','Observação'], ''))
+  };
+  const acts = getFirst(raw, ['atividades','Atividades'], []);
+  if(Array.isArray(acts)) entry.atividades = acts.map(a=> normalizeActivity(a));
+  if(raw._isUserModified) entry._isUserModified = true;
+  return entry;
+};
+const ensureActivityList = (entry)=>{
+  if(!entry) return entry;
+  if(!Array.isArray(entry.atividades)) entry.atividades = [];
+  if(!entry.atividades.length) entry.atividades.push(createEmptyActivity());
+  return entry;
+};
+const createEmptyEntry = (code, denominacao='', obs='')=> ensureActivityList({ cnae: toStr(code), denominacao: toStr(denominacao), atividades: [], obs: toStr(obs) });
 function escapeHtml(str){ if(str==null) return ''; return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'); }
 async function tryFetchJSON(url){
   try {
@@ -498,7 +585,9 @@ async function loadOverridesFromFirebase() {
             const cnaeCode = decodeCnaeFromFirebase(doc.id);
             const data = doc.data();
             data._isUserModified = true;
-            state.data[cnaeCode] = data;
+            const normalized = ensureActivityList(normalizeEntry({ ...data, cnae: cnaeCode }, cnaeCode)) || createEmptyEntry(cnaeCode);
+            normalized._isUserModified = true;
+            state.data[cnaeCode] = normalized;
             count++;
         });
         if (count > 0) {
@@ -625,21 +714,30 @@ function normalizeRevisado(json){
   const out={};
   if(json && typeof json==='object' && !Array.isArray(json)){
     for(const [code, obj] of Object.entries(json)){
-      const atividades = Array.isArray(obj.atividades)? obj.atividades.map(a=>({
-        diretoria: a.diretoria||'',
-        condicionante_risco: a.condicionante_risco||'',
-        tipologia: a.tipologia||'',
-        nivel_de_risco: (mapRoman[a.nivel_de_risco]||'I')
-      })) : [];
-      out[code] = { cnae:code, denominacao: obj.denominacao||'', atividades, obs: obj.observacao||obj.obs||'' };
+      const entry = ensureActivityList(normalizeEntry(obj, code));
+      if(entry) out[entry.cnae] = entry;
     }
   } else if(Array.isArray(json)){
     for(const row of json){
-      const code = String(row.CNAE||row.cnae||'').trim(); if(!code) continue;
-      if(!out[code]) out[code] = { cnae: code, denominacao: row.Descrição||row.descricao||'', atividades: [], obs: row.obs||'' };
-      const nivel = mapRoman[row["Nível de Risco"]||row.nivel_risco||row.nivel||'I']||'I';
-      out[code].atividades.push({ diretoria: row.Diretoria||row.diretoria||'', condicionante_risco: (row.Condicionantes||row.condicionantes||'').toString(), tipologia: (row.Tipologia||row.tipologia||'').toString(), nivel_de_risco: nivel });
+      const code = toStr(getFirst(row, ['CNAE','cnae','codigo','Código']));
+      if(!code) continue;
+      if(!out[code]) out[code] = normalizeEntry({ cnae: code }) || createEmptyEntry(code);
+      const entry = out[code];
+      const denom = toStr(getFirst(row, ['denominacao','denominação','Denominacao','Denominação','descricao','descrição','Descrição']));
+      if(denom) entry.denominacao = denom;
+      const obs = getFirst(row, ['obs','observacao','observação','Observacao','Observação']);
+      if(obs!=null) entry.obs = toStr(obs);
+      const rawRisk = getFirst(row, ['Nível de Risco','nivel_risco','nivel','nivel_de_risco','risco','Risco']);
+      const act = normalizeActivity({
+        diretoria: getFirst(row, ['Diretoria','diretoria']),
+        condicionante_risco: getFirst(row, ['condicionante_risco','Condicionante','Condicionantes','condicionantes']),
+        tipologia: getFirst(row, ['Tipologia','tipologia']),
+        nivel_de_risco: rawRisk
+      });
+      const hasContent = act.diretoria || act.condicionante_risco || act.tipologia || toStr(rawRisk) !== '';
+      if(hasContent) entry.atividades.push(act);
     }
+    for(const code of Object.keys(out)){ ensureActivityList(out[code]); }
   }
   return out;
 }
@@ -647,18 +745,40 @@ function normalizeBase(json){
   const out={};
   const rows = Array.isArray(json)? json : Object.entries(json||{}).map(([k,v])=>({CNAE:k, ...v}));
   for(const row of rows){
-    const code = String(row.CNAE||row.cnae||row.codigo||'').trim(); if(!code) continue;
+    const code = toStr(getFirst(row, ['CNAE','cnae','codigo','Código']));
+    if(!code) continue;
+    const entry = normalizeEntry(row, code) || createEmptyEntry(code);
+    const diretoria = toStr(getFirst(row, ['Diretoria','diretoria']));
+    const tipologia = toStr(getFirst(row, ['Tipologia','tipologia']));
     const baseActs = [];
-    const rf = row.RiscoFixo ?? row.Risco ?? row.risco ?? row.RiscoBase ?? row["Risco Base"];
-    if(rf){ baseActs.push({ diretoria: row.Diretoria||row.diretoria||'', condicionante_risco:'', tipologia: row.Tipologia||row.tipologia||'', nivel_de_risco: mapRoman[rf]||'I' }); }
-    const perguntas = row.Perguntas||row.perguntas||[];
+    const rf = getFirst(row, ['RiscoFixo','Risco','risco','RiscoBase','Risco Base']);
+    if(rf!=null && toStr(rf)!==''){
+      baseActs.push(normalizeActivity({ diretoria, tipologia, nivel_de_risco: rf }));
+    }
+    const perguntas = getFirst(row, ['Perguntas','perguntas'], []);
     if(Array.isArray(perguntas)){
       for(const p of perguntas){
-        const opts = p.options||p.opcoes||[];
-        for(const opt of opts){ if(opt && opt.risk!=null){ baseActs.push({ diretoria: row.Diretoria||row.diretoria||'', condicionante_risco: ((p.text||p.pergunta||'')+(opt.value? (': '+opt.value):'')), tipologia: row.Tipologia||row.tipologia||'', nivel_de_risco: mapRoman[opt.risk]||'I' }); } }
+        const texto = toStr(getFirst(p, ['text','pergunta']));
+        const opts = getFirst(p, ['options','opcoes'], []);
+        if(!Array.isArray(opts)) continue;
+        for(const opt of opts){
+          if(!opt) continue;
+          const risk = getFirst(opt, ['risk','risco']);
+          if(risk==null || toStr(risk)==='') continue;
+          const value = toStr(getFirst(opt, ['value','valor']));
+          const cond = (texto && value) ? `${texto}: ${value}` : (texto || value);
+          baseActs.push(normalizeActivity({
+            diretoria,
+            tipologia,
+            condicionante_risco: cond,
+            nivel_de_risco: risk
+          }));
+        }
       }
     }
-    out[code] = { cnae:code, denominacao: row.Denominacao||row.Denominação||row.descricao||row.Descrição||row.denominacao||'', atividades: baseActs, obs: row.Observacao||row.observacao||'' };
+    entry.atividades = baseActs;
+    ensureActivityList(entry);
+    out[code] = entry;
   }
   return out;
 }
@@ -671,7 +791,7 @@ const IBGE = {
 
 /* ======= Regras de risco e inconsistências ======= */
 function aggregateRisk(ativs){
-  const raw = (ativs||[]).map(a=> mapRoman[a?.nivel_de_risco] || '').filter(r=> r==='I' || r==='II' || r==='III');
+  const raw = (ativs||[]).map(a=> normalizeRiskLevel(a?.nivel_de_risco)).filter(r=> r==='I' || r==='II' || r==='III');
   const set = new Set(raw);
   if(set.size===0) return 'I';
   const order = ['I','II','III'];
@@ -862,7 +982,7 @@ function openEdit(code){
   const dlg=$('#dlg'); if(dlg && dlg.showModal) dlg.showModal();
 }
 function closeEdit(){ const dlg=$('#dlg'); if(dlg) dlg.close(); state.edited=null; }
-function renderActs(e){ const host=$('#acts'); if(!host) return; host.innerHTML=''; (e.atividades=e.atividades||[]).forEach((a,idx)=> host.appendChild(actRow(e,a,idx)) ); }
+function renderActs(e){ const host=$('#acts'); if(!host) return; ensureActivityList(e); host.innerHTML=''; e.atividades.forEach((a,idx)=> host.appendChild(actRow(e,a,idx)) ); }
 function actRow(entry,a,idx){
   const row=document.createElement('div'); row.className='act';
   row.innerHTML = `
@@ -890,7 +1010,7 @@ function wireEvents(){
     const cur = document.documentElement.getAttribute('data-theme') || 'dark';
     applyTheme(cur==='dark' ? 'light' : 'dark');
   };
-  $('#btnAddAct').onclick=()=>{ if(!state.edited) return; const e=state.data[state.edited]; e.atividades.push({diretoria:'',condicionante_risco:'',tipologia:'',nivel_de_risco:'I'}); renderActs(e); };
+  $('#btnAddAct').onclick=()=>{ if(!state.edited) return; const e=state.data[state.edited]; ensureActivityList(e).atividades.push(createEmptyActivity()); renderActs(e); };
   $('#btnSave').onclick=()=>{ const code=state.edited; if(!code) return; const e=state.data[code]; e.denominacao=$('#dlgDenom').value; e.obs=$('#dlgObs').value; closeEdit(); refresh(); saveCnaeToFirebase(code); };
   $('#btnClose').onclick=closeEdit;
 
@@ -899,7 +1019,20 @@ function wireEvents(){
   $('#fileBase').addEventListener('change', async ev=>{ const f=ev.target.files[0]; if(!f) return; const json=await readFileAsJSON(f); if(!json) return; state.base = normalizeBase(json); await $('#btnSyncIBGE').click(); toast('Base Vigente importada e sincronizada.'); });
   $('#auth-btn').onclick = handleAuthClick;
 
-  $('#btnExportJson').onclick=()=>{ const out={}; for(const [code,e] of Object.entries(state.data)){ out[code] = { denominacao: e.denominacao||'', atividades: (e.atividades||[]).map(a=>({ diretoria:a.diretoria||'', condicionante_risco:a.condicionante_risco||'', tipologia:a.tipologia||'', nivel_de_risco:a.nivel_de_risco||'I' })), observacao: e.obs||'' }; } const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='classificacao_revisada_export.json'; a.click(); };
+  $('#btnExportJson').onclick=()=>{
+    const out={};
+    for(const [code,e] of Object.entries(state.data)){
+      const entry = ensureActivityList(normalizeEntry({ ...e, cnae: code }, code)) || createEmptyEntry(code);
+      out[code] = {
+        cnae: entry.cnae,
+        denominacao: entry.denominacao || '',
+        atividades: (entry.atividades||[]).map(a=> normalizeActivity(a)),
+        obs: entry.obs || ''
+      };
+    }
+    const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='classificacao_revisada_export.json'; a.click();
+  };
   $('#btnExportExcel').onclick=()=>{
     const rowsResumo=[["CNAE","Denominação","Diretorias","Tipologias","Risco agregado","Qtde conds","Inconsistências"]];
     const rowsAt=[["CNAE","Denominação","Diretoria","Condicionante","Tipologia","Risco"]];
@@ -946,21 +1079,25 @@ function wireEvents(){
 
         for (const [id, obj] of all) {
           const code = subclassDigitsToCNAE(id);
-          
+          const descricao = toStr(obj?.descricao);
+
           if (!state.data[code]) {
-            state.data[code] = { cnae: code, denominacao: obj.descricao, atividades: [{ diretoria: '', condicionante_risco: '', tipologia: '', nivel_de_risco: 'I' }], obs: '' };
+            state.data[code] = createEmptyEntry(code, descricao);
             addData++;
-          } else if (obj.descricao && !state.data[code]._isUserModified) {
-             state.data[code].denominacao = obj.descricao;
+          } else {
+            state.data[code].cnae = state.data[code].cnae || code;
+            ensureActivityList(state.data[code]);
+            if (descricao && !state.data[code]._isUserModified) {
+               state.data[code].denominacao = descricao;
+            }
           }
 
           if (state.base[code]) {
-             augBase[code] = JSON.parse(JSON.stringify(state.base[code]));
-             if (obj.descricao && augBase[code].denominacao !== obj.descricao) {
-                 augBase[code].denominacao = obj.descricao;
-             }
+             const clonedBase = ensureActivityList(normalizeEntry(JSON.parse(JSON.stringify(state.base[code])), code)) || createEmptyEntry(code);
+             if (descricao) clonedBase.denominacao = descricao;
+             augBase[code] = clonedBase;
           } else {
-            augBase[code] = { cnae: code, denominacao: obj.descricao, atividades: [{ diretoria: '', condicionante_risco: '', tipologia: '', nivel_de_risco: 'I' }], obs: '' };
+            augBase[code] = createEmptyEntry(code, descricao);
           }
         }
         

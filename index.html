@@ -113,36 +113,43 @@
     .lvl-3{ background: rgba(var(--danger), .18); color: rgb(var(--danger)); }
     .lvl-p{ background: rgba(var(--violet), .18); color: rgb(var(--violet)); }
 
-    .matrix-cell{ display:flex; flex-direction:column; gap:10px; min-width:180px; }
-    .matrix-card{ position:relative; border-radius:14px; border:1px solid rgba(var(--border), .08); background: linear-gradient(135deg, rgba(var(--border), .12), rgba(var(--border), .03)); padding:12px; display:flex; gap:12px; align-items:flex-start; box-shadow: var(--shadow-1); transition: transform .2s ease, box-shadow .2s ease; cursor: help; overflow: visible; }
-    .matrix-card:hover{ transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.28); }
-    .matrix-card::before{ content:''; position:absolute; top:-32px; right:-28px; width:120px; height:120px; background: radial-gradient(circle at top right, rgba(var(--border), .18), transparent 60%); opacity:.45; pointer-events:none; }
-    .matrix-card[data-risk="I"]{ border-color: rgba(var(--ok), .45); background: linear-gradient(135deg, rgba(var(--ok), .22), rgba(var(--ok), .05)); }
-    .matrix-card[data-risk="II"]{ border-color: rgba(var(--warn), .45); background: linear-gradient(135deg, rgba(var(--warn), .24), rgba(var(--warn), .05)); }
-    .matrix-card[data-risk="III"]{ border-color: rgba(var(--danger), .45); background: linear-gradient(135deg, rgba(var(--danger), .22), rgba(var(--danger), .05)); }
+    .matrix-cell{ display:flex; flex-direction:column; gap:12px; min-width:220px; }
+    .matrix-card{ position:relative; border-radius:16px; border:1px solid rgba(var(--border), .1); background: linear-gradient(145deg, rgba(var(--border), .12), rgba(var(--border), .02)); padding:16px; display:flex; flex-direction:column; gap:12px; box-shadow: var(--shadow-1); transition: transform .2s ease, box-shadow .2s ease; cursor: help; overflow: visible; }
+    .matrix-card:hover{ transform: translateY(-2px); box-shadow: 0 14px 32px rgba(0,0,0,.3); }
+    .matrix-card::before{ content:''; position:absolute; inset:-1px; border-radius:inherit; background: radial-gradient(circle at 110% 0%, rgba(var(--border), .15), transparent 55%); opacity:.55; pointer-events:none; z-index:0; }
+    .matrix-card > *{ position:relative; z-index:1; }
+    .matrix-card[data-risk="I"]{ border-color: rgba(var(--ok), .55); background: linear-gradient(145deg, rgba(var(--ok), .22), rgba(var(--ok), .05)); }
+    .matrix-card[data-risk="II"]{ border-color: rgba(var(--warn), .55); background: linear-gradient(145deg, rgba(var(--warn), .24), rgba(var(--warn), .05)); }
+    .matrix-card[data-risk="III"]{ border-color: rgba(var(--danger), .55); background: linear-gradient(145deg, rgba(var(--danger), .22), rgba(var(--danger), .05)); }
     [data-theme="light"] .matrix-card{ box-shadow: var(--shadow-1); }
-    .matrix-card-header{ display:flex; align-items:center; flex-shrink:0; }
-    .matrix-card-header .pill{ font-size:11px; padding:4px 9px; }
-    .matrix-card-body{ display:flex; flex-direction:column; gap:6px; flex:1; min-width:0; }
-    .matrix-label{ font-weight:600; font-size:13px; letter-spacing:.2px; color:rgb(var(--fg)); text-transform: uppercase; }
-    .matrix-metrics{ display:flex; flex-wrap:wrap; gap:8px; }
-    .matrix-metric{ display:flex; flex-direction:column; gap:2px; padding:6px 10px; border-radius:10px; border:1px solid rgba(var(--border), .16); background: rgba(var(--modal-bg), .45); min-width:110px; }
-    .matrix-card[data-risk="I"] .matrix-metric{ background: rgba(var(--ok), .18); border-color: rgba(var(--ok), .45); }
-    .matrix-card[data-risk="II"] .matrix-metric{ background: rgba(var(--warn), .18); border-color: rgba(var(--warn), .45); }
-    .matrix-card[data-risk="III"] .matrix-metric{ background: rgba(var(--danger), .18); border-color: rgba(var(--danger), .45); }
-    .metric-label{ font-size:10px; text-transform:uppercase; letter-spacing:.5px; color: rgba(var(--muted-rgb), .85); }
-    .metric-value{ font-size:12px; font-weight:600; color: rgb(var(--fg)); }
+    .matrix-heading{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .matrix-card .pill{ font-size:11px; padding:4px 9px; }
+    .matrix-title{ font-size:11px; letter-spacing:.35px; font-weight:700; text-transform:uppercase; color: rgba(var(--muted-rgb), .95); }
+    .matrix-summary{ font-size:13px; font-weight:600; letter-spacing:.25px; color: rgb(var(--fg)); text-transform:uppercase; }
+    .matrix-metrics{ display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
+    .matrix-metric{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; border:1px solid rgba(var(--border), .12); background: rgba(var(--modal-bg), .55); box-shadow: inset 0 1px 0 rgba(var(--border), .08); transition: transform .15s ease; }
+    .matrix-metric:hover{ transform: translateY(-1px); }
+    .metric-icon{ width:34px; height:34px; border-radius:12px; display:flex; align-items:center; justify-content:center; background: rgba(var(--border), .1); color: rgb(var(--fg)); flex-shrink:0; }
+    .metric-icon svg{ width:18px; height:18px; stroke-width:1.8; stroke: currentColor; fill:none; }
+    .metric-text{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+    .metric-label{ font-size:10px; text-transform:uppercase; letter-spacing:.5px; color: rgba(var(--muted-rgb), .9); }
+    .metric-value{ font-size:14px; font-weight:600; color: rgb(var(--fg)); text-transform:uppercase; word-break: break-word; }
+    .matrix-card[data-risk="I"] .metric-icon{ background: rgba(var(--ok), .2); color: rgb(var(--ok)); }
+    .matrix-card[data-risk="II"] .metric-icon{ background: rgba(var(--warn), .2); color: rgb(var(--warn)); }
+    .matrix-card[data-risk="III"] .metric-icon{ background: rgba(var(--danger), .2); color: rgb(var(--danger)); }
+    .matrix-card[data-risk="I"] .matrix-metric{ border-color: rgba(var(--ok), .4); background: rgba(var(--ok), .16); }
+    .matrix-card[data-risk="II"] .matrix-metric{ border-color: rgba(var(--warn), .4); background: rgba(var(--warn), .16); }
+    .matrix-card[data-risk="III"] .matrix-metric{ border-color: rgba(var(--danger), .4); background: rgba(var(--danger), .16); }
     .matrix-card-hint{ display:none; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color: rgba(var(--muted-rgb), .75); }
     .matrix-card[data-tooltip] .matrix-card-hint{ display:block; }
-    .matrix-card[data-tooltip]::after{ content: attr(data-tooltip); position:absolute; bottom: calc(100% + 10px); left:12px; padding:10px 12px; border-radius:10px; border:1px solid rgba(var(--border), .12); background: rgba(var(--modal-bg), .95); box-shadow: var(--shadow-2); color: rgb(var(--fg)); font-size:12px; line-height:1.35; white-space:pre-line; opacity:0; transform: translateY(6px); transition: opacity .18s ease, transform .18s ease; pointer-events:none; width:220px; z-index:20; }
-    .matrix-card[data-tooltip]::before{ content:''; position:absolute; bottom: calc(100% + 2px); left:32px; width:10px; height:10px; background: rgba(var(--modal-bg), .95); border-left:1px solid rgba(var(--border), .12); border-top:1px solid rgba(var(--border), .12); transform: rotate(45deg); opacity:0; transition: opacity .18s ease, transform .18s ease; z-index:19; }
+    .matrix-card[data-tooltip]::after{ content: attr(data-tooltip); position:absolute; bottom: calc(100% + 10px); left:16px; padding:10px 12px; border-radius:10px; border:1px solid rgba(var(--border), .12); background: rgba(var(--modal-bg), .95); box-shadow: var(--shadow-2); color: rgb(var(--fg)); font-size:12px; line-height:1.35; white-space:pre-line; opacity:0; transform: translateY(6px); transition: opacity .18s ease, transform .18s ease; pointer-events:none; width:240px; z-index:20; }
+    .matrix-card[data-tooltip]::before{ content:''; position:absolute; bottom: calc(100% + 4px); left:34px; width:10px; height:10px; background: rgba(var(--modal-bg), .95); border-left:1px solid rgba(var(--border), .12); border-top:1px solid rgba(var(--border), .12); transform: rotate(45deg); opacity:0; transition: opacity .18s ease, transform .18s ease; z-index:19; }
     .matrix-card[data-tooltip]:hover::after, .matrix-card[data-tooltip]:hover::before{ opacity:1; transform: translateY(0); }
 
     @media (max-width: 960px) {
       .matrix-cell{ min-width:0; }
       .matrix-card{ flex-direction:column; align-items:flex-start; }
-      .matrix-metrics{ width:100%; }
-      .matrix-metric{ flex:1; min-width:0; }
+      .matrix-metrics{ width:100%; grid-template-columns: 1fr; }
     }
     
     details summary{ cursor:pointer; font-weight:600; margin:8px 0; list-style-position: inside; }
@@ -518,6 +525,10 @@ const state = {
     data: {}, base: {}, augmentedBase: {}, concla: new Map(), matriz: new Map(),
     filter: { q:'', nivel: '', diretoria: '' },
     edited: null, user: null, isAuthorized: false, isAdmin: false
+};
+const MATRIX_METRIC_ICONS = {
+  probabilidade: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="12" r="1"></circle></svg>',
+  potencial: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 10-12h-7z"></path></svg>'
 };
 
 /* ======= Firebase & Auth & Admin ======= */
@@ -1002,18 +1013,31 @@ function riskPill(r){
 function describeMatrix(matrix){
   const normalized = toStr(matrix).replace(/[×]/g, 'x').replace(/\s+/g, ' ').trim();
   if(!normalized) return { label:'', tooltip:'', metrics:[] };
-  const parts = normalized.split(/x/i).map(part=>part.trim()).filter(Boolean);
-  const labels = ['Probabilidade', 'Impacto', 'Dimensão'];
-  const metrics = parts.slice(0,3).map((value, idx)=>({
-    label: idx < labels.length ? labels[idx] : `Dimensão ${idx+1}`,
-    value
-  }));
-  const tooltip = metrics.length ? metrics.map(m=>`${m.label}: ${m.value}`).join('\n') : normalized;
-  return {
-    label: normalized.replace(/x/gi, '×'),
-    tooltip,
-    metrics
+  const tokens = normalized.split(/x/i).map(part=>part.trim()).filter(Boolean);
+  if(!tokens.length) return { label:'', tooltip:'', metrics:[] };
+  const clean = (value)=> toStr(value)
+    .replace(/^(probabilidade|potencial(?:idade)?|impacto|dimens[aã]o)\s*[:\-]?/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const pick = {
+    probabilidade: '',
+    potencial: ''
   };
+  for(const token of tokens){
+    const lower = token.toLowerCase();
+    if(!pick.probabilidade && /prob/.test(lower)){ pick.probabilidade = clean(token); continue; }
+    if(!pick.potencial && /(pot|impact)/.test(lower)){ pick.potencial = clean(token); continue; }
+  }
+  const leftovers = tokens.map(clean).filter(Boolean);
+  if(!pick.probabilidade && leftovers.length) pick.probabilidade = leftovers.shift();
+  if(!pick.potencial && leftovers.length) pick.potencial = leftovers.shift();
+  const metrics = [];
+  if(pick.probabilidade) metrics.push({ key:'probabilidade', label:'Probabilidade', value: pick.probabilidade });
+  if(pick.potencial) metrics.push({ key:'potencial', label:'Potencial', value: pick.potencial });
+  if(!metrics.length) return { label:'', tooltip:'', metrics:[] };
+  const label = metrics.map(m=>m.value).join(' × ');
+  const tooltip = metrics.map(m=>`${m.label}: ${m.value}`).join('\n');
+  return { label, tooltip, metrics };
 }
 function renderMatrixCell(code, riskLabel){
   const risks = toStr(riskLabel).split('/').map(p=>p.trim()).filter(Boolean);
@@ -1029,12 +1053,17 @@ function renderMatrixCell(code, riskLabel){
     const matrix = matrixMap.get(normalizedRisk);
     if(!matrix) continue;
     const details = describeMatrix(matrix);
-    if(!details.label) continue;
-    const metricsHtml = details.metrics.length
-      ? `<div class="matrix-metrics">${details.metrics.map(m=> `<span class="matrix-metric"><span class="metric-label">${escapeHtml(m.label)}</span><span class="metric-value">${escapeHtml(m.value)}</span></span>`).join('')}</div>`
-      : '';
+    if(!details.metrics.length) continue;
+    const metricsHtml = `<div class="matrix-metrics">${details.metrics.map(m=> {
+      const icon = MATRIX_METRIC_ICONS[m.key] || MATRIX_METRIC_ICONS.probabilidade;
+      return `<div class="matrix-metric metric-${escapeHtml(m.key)}"><span class="metric-icon">${icon}</span><span class="metric-text"><span class="metric-label">${escapeHtml(m.label)}</span><span class="metric-value">${escapeHtml(m.value)}</span></span></div>`;
+    }).join('')}</div>`;
     const tooltipAttr = details.tooltip ? ` data-tooltip="${escapeHtml(details.tooltip).replace(/\n/g, '&#10;')}"` : '';
-    parts.push(`<div class="matrix-card" data-risk="${escapeHtml(normalizedRisk)}"${tooltipAttr}><div class="matrix-card-header">${riskPill(normalizedRisk)}</div><div class="matrix-card-body"><div class="matrix-label">${escapeHtml(details.label)}</div>${metricsHtml}${details.metrics.length?'<span class="matrix-card-hint">Passe o cursor para ver detalhes</span>':''}</div></div>`);
+    const ariaParts = [`Risco ${normalizedRisk}`, ...details.metrics.map(m=>`${m.label}: ${m.value}`)];
+    const ariaAttr = ` role="group" aria-label="${escapeHtml(ariaParts.join('. '))}" tabindex="0"`;
+    const summary = details.label ? `<span class="matrix-summary">${escapeHtml(details.label)}</span>` : '';
+    const hint = details.tooltip ? '<span class="matrix-card-hint">Passe o cursor para ver detalhes</span>' : '';
+    parts.push(`<div class="matrix-card" data-risk="${escapeHtml(normalizedRisk)}"${tooltipAttr}${ariaAttr}><div class="matrix-heading"><span class="matrix-title">Matriz de risco</span>${riskPill(normalizedRisk)}</div>${summary}${metricsHtml}${hint}</div>`);
   }
   if(!parts.length) return '<span class="muted">-</span>';
   return `<div class="matrix-cell">${parts.join('')}</div>`;

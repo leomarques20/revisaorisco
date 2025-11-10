@@ -230,8 +230,9 @@
             <th style="min-width:110px;">CNAE</th>
             <th style="min-width:280px;">Descrição (IBGE)</th>
             <th style="min-width:180px;">Diretorias</th>
-            <th style="min-width:120px;">Risco Vigente (base)</th>
-            <th style="min-width:120px;">Risco Revisado</th>
+            <th style="min-width:120px;">Risco Anterior</th>
+            <th style="min-width:120px;">Risco Vigente</th>
+            <th style="min-width:160px;">Matriz de risco</th>
             <th style="min-width:80px;">Ações</th>
           </tr>
         </thead>
@@ -353,15 +354,18 @@ const toast = (m)=>{ const t=$('#toast'); if(!t) return; t.textContent=m; t.clas
 const mapRoman = { '1':'I','2':'II','3':'III', 'I':'I','II':'II','III':'III' };
 const mapArab  = { 'I':1,'II':2,'III':3, '1':1,'2':2,'3':3 };
 const riskAliases = new Map([
-  ['0','I'],
-  ['0.0','I'],
-  ['NAO SUJEITO','I'],
-  ['NÃO SUJEITO','I'],
-  ['NAOSUJEITO','I'],
-  ['NAO_SUJEITO','I'],
-  ['NAO','I'],
-  ['NÃO','I'],
-  ['SEM RISCO','I'],
+  ['NA', 'NA'],
+  ['N/A', 'NA'],
+  ['NAO SUJEITO', 'NA'],
+  ['NÃO SUJEITO', 'NA'],
+  ['NAO-SUJEITO', 'NA'],
+  ['NÃO-SUJEITO', 'NA'],
+  ['NAOSUJEITO', 'NA'],
+  ['NAO_SUJEITO', 'NA'],
+  ['NÃO_SUJEITO', 'NA'],
+  ['NAO', 'NA'],
+  ['NÃO', 'NA'],
+  ['SEM RISCO', 'NA'],
 ]);
 const toStr = (value)=>{ if(value==null) return ''; return String(value).trim(); };
 const ensureArrayOfStrings = (value)=>{
@@ -378,22 +382,36 @@ const ensureArrayOfStrings = (value)=>{
   if(typeof value === 'string'){ const str = toStr(value); return str? [str] : []; }
   return [value];
 };
+const normalizeDiretoria = (value)=>{
+  const str = toStr(value);
+  if(!str) return '';
+  const ascii = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  const condensed = ascii.replace(/[\s_\-]/g, '');
+  if(condensed === 'NAOSUJEITO') return '';
+  return str;
+};
 const normalizeRiskLevel = (value)=>{
-  if(value==null) return 'I';
+  if(value==null) return '';
   const raw = toStr(value);
-  if(!raw) return 'I';
+  if(!raw) return '';
   const upper = raw.toUpperCase();
   if(riskAliases.has(upper)) return riskAliases.get(upper);
+  if(upper === 'NULL' || upper === 'NULO') return '';
+  if(/^0+(?:\.0+)?$/.test(upper)) return 'NA';
   if(mapRoman[raw]) return mapRoman[raw];
   if(mapRoman[upper]) return mapRoman[upper];
   const digits = upper.replace(/[^0-9]/g, '');
-  if(digits && mapRoman[digits]) return mapRoman[digits];
+  if(digits){
+    if(/^0+$/.test(digits)) return 'NA';
+    if(mapRoman[digits]) return mapRoman[digits];
+  }
   const roman = upper.replace(/[^IVX]/g, '');
   if(roman && mapRoman[roman]) return mapRoman[roman];
-  return ['I','II','III'].includes(upper) ? upper : 'I';
+  if(['I','II','III','NA'].includes(upper)) return upper;
+  return upper;
 };
 function normalizeActivity(raw={}, context={}){
-  const diretoria = toStr(raw.diretoria ?? raw.Diretoria ?? context.diretoria);
+  const diretoria = normalizeDiretoria(raw.diretoria ?? raw.Diretoria ?? context.diretoria);
   const cond = toStr(raw.condicionante_risco ?? raw.condicionante ?? raw.Condicionantes ?? raw.condicionantes ?? context.condicionante_risco);
   const tipologia = toStr(raw.tipologia ?? raw.Tipologia ?? context.tipologia);
   const nivel = normalizeRiskLevel(raw.nivel_de_risco ?? raw.nivel ?? raw.risco ?? raw['Nível de Risco'] ?? context.nivel_de_risco);
@@ -464,9 +482,9 @@ function cnaeToSubclassDigits(cnae){ return (cnae||'').replace(/[^0-9]/g,''); }
 function subclassDigitsToCNAE(id){ const s=String(id||'').padStart(7,'0'); return `${s.slice(0,4)}-${s.slice(4,5)}/${s.slice(5,7)}`; }
 
 /* ======= Estado ======= */
-const state = { 
-    data: {}, base: {}, augmentedBase: {}, concla: new Map(), 
-    filter: { q:'', nivel: '', diretoria: '' }, 
+const state = {
+    data: {}, base: {}, augmentedBase: {}, concla: new Map(), matriz: new Map(),
+    filter: { q:'', nivel: '', diretoria: '' },
     edited: null, user: null, isAuthorized: false, isAdmin: false
 };
 
@@ -727,15 +745,48 @@ function normalizeRevisado(json){
       if(denom) entry.denominacao = denom;
       const obs = getFirst(row, ['obs','observacao','observação','Observacao','Observação']);
       if(obs!=null) entry.obs = toStr(obs);
-      const rawRisk = getFirst(row, ['Nível de Risco','nivel_risco','nivel','nivel_de_risco','risco','Risco']);
-      const act = normalizeActivity({
-        diretoria: getFirst(row, ['Diretoria','diretoria']),
-        condicionante_risco: getFirst(row, ['condicionante_risco','Condicionante','Condicionantes','condicionantes']),
-        tipologia: getFirst(row, ['Tipologia','tipologia']),
-        nivel_de_risco: rawRisk
-      });
-      const hasContent = act.diretoria || act.condicionante_risco || act.tipologia || toStr(rawRisk) !== '';
-      if(hasContent) entry.atividades.push(act);
+      entry.atividades = [];
+      const diretoria = toStr(getFirst(row, ['Diretoria','diretoria']));
+      const tipologia = toStr(getFirst(row, ['Tipologia','tipologia']));
+      const rf = getFirst(row, ['RiscoFixo','Risco','risco','RiscoBase','Risco Base']);
+      const rfStr = toStr(rf);
+      if(rf!=null && rfStr!=='' && rfStr.toLowerCase()!=='null'){
+        entry.atividades.push(normalizeActivity({ diretoria, tipologia, nivel_de_risco: rf }));
+      }
+      const perguntas = getFirst(row, ['Perguntas','perguntas'], []);
+      if(Array.isArray(perguntas)){
+        for(const p of perguntas){
+          const texto = toStr(getFirst(p, ['text','pergunta']));
+          const opts = getFirst(p, ['options','opcoes'], []);
+          if(!Array.isArray(opts)) continue;
+          for(const opt of opts){
+            if(!opt) continue;
+            const risk = getFirst(opt, ['risk','risco']);
+            const riskStr = toStr(risk);
+            if(risk==null || riskStr==='' || riskStr.toLowerCase()==='null') continue;
+            const value = toStr(getFirst(opt, ['value','valor']));
+            const cond = (texto && value) ? `${texto}: ${value}` : (texto || value);
+            entry.atividades.push(normalizeActivity({
+              diretoria,
+              tipologia,
+              condicionante_risco: cond,
+              nivel_de_risco: risk
+            }));
+          }
+        }
+      }
+      if(!entry.atividades.length){
+        const rawRisk = getFirst(row, ['Nível de Risco','nivel_risco','nivel','nivel_de_risco','risco','Risco']);
+        const rawRiskStr = toStr(rawRisk);
+        const act = normalizeActivity({
+          diretoria,
+          condicionante_risco: getFirst(row, ['condicionante_risco','Condicionante','Condicionantes','condicionantes']),
+          tipologia,
+          nivel_de_risco: rawRisk
+        });
+        const hasContent = act.diretoria || act.condicionante_risco || act.tipologia || (rawRiskStr !== '' && rawRiskStr.toLowerCase()!=='null');
+        if(hasContent) entry.atividades.push(act);
+      }
     }
     for(const code of Object.keys(out)){ ensureActivityList(out[code]); }
   }
@@ -752,7 +803,8 @@ function normalizeBase(json){
     const tipologia = toStr(getFirst(row, ['Tipologia','tipologia']));
     const baseActs = [];
     const rf = getFirst(row, ['RiscoFixo','Risco','risco','RiscoBase','Risco Base']);
-    if(rf!=null && toStr(rf)!==''){
+    const rfStr = toStr(rf);
+    if(rf!=null && rfStr!=='' && rfStr.toLowerCase()!=='null'){
       baseActs.push(normalizeActivity({ diretoria, tipologia, nivel_de_risco: rf }));
     }
     const perguntas = getFirst(row, ['Perguntas','perguntas'], []);
@@ -764,7 +816,8 @@ function normalizeBase(json){
         for(const opt of opts){
           if(!opt) continue;
           const risk = getFirst(opt, ['risk','risco']);
-          if(risk==null || toStr(risk)==='') continue;
+          const riskStr = toStr(risk);
+          if(risk==null || riskStr==='' || riskStr.toLowerCase()==='null') continue;
           const value = toStr(getFirst(opt, ['value','valor']));
           const cond = (texto && value) ? `${texto}: ${value}` : (texto || value);
           baseActs.push(normalizeActivity({
@@ -782,6 +835,38 @@ function normalizeBase(json){
   }
   return out;
 }
+function buildMatrizIndex(json){
+  const map = new Map();
+  if(!json) return map;
+  const entries = Array.isArray(json)
+    ? json
+    : Object.entries(json||{}).map(([code, value])=> ({ cnae: code, ...(value||{}) }));
+  for(const entry of entries){
+    const code = toStr(getFirst(entry, ['cnae','CNAE','codigo','Código'], entry.cnae));
+    if(!code) continue;
+    const acts = getFirst(entry, ['atividades','Atividades'], []);
+    const riskMap = new Map();
+    if(Array.isArray(acts)){
+      for(const act of acts){
+        if(!act) continue;
+        const risk = normalizeRiskLevel(getFirst(act, ['nivel_de_risco','nivel','risco','Risco']));
+        if(!risk || risk === 'NA') continue;
+        let matrix = toStr(getFirst(act, ['matriz_risco','matriz']));
+        if(matrix.toLowerCase() === 'null') matrix = '';
+        if(!matrix){
+          const prob = toStr(getFirst(act, ['probabilidade_ocorrencia_sinistro','probabilidade']));
+          const pot = toStr(getFirst(act, ['potencial_danoso_sinistro','potencial']));
+          if(prob && pot) matrix = `${prob} x ${pot}`;
+        }
+        if(matrix && matrix.toLowerCase()!=='null' && !riskMap.has(risk)){
+          riskMap.set(risk, matrix);
+        }
+      }
+    }
+    map.set(code, riskMap);
+  }
+  return map;
+}
 
 /* ======= IBGE / CONCLA ======= */
 const IBGE = {
@@ -791,11 +876,17 @@ const IBGE = {
 
 /* ======= Regras de risco e inconsistências ======= */
 function aggregateRisk(ativs){
-  const raw = (ativs||[]).map(a=> normalizeRiskLevel(a?.nivel_de_risco)).filter(r=> r==='I' || r==='II' || r==='III');
-  const set = new Set(raw);
-  if(set.size===0) return 'I';
-  const order = ['I','II','III'];
-  return order.filter(r => set.has(r)).join('/');
+  const set = new Set();
+  for(const a of ativs||[]){
+    const risk = normalizeRiskLevel(a?.nivel_de_risco);
+    if(!risk) continue;
+    set.add(risk);
+  }
+  if(set.size===0) return 'NA';
+  const order = ['I','II','III','NA'];
+  const ordered = order.filter(r => set.has(r));
+  const others = [...set].filter(r => !order.includes(r));
+  return [...ordered, ...others].join('/');
 }
 function detectIssues(entry){
   const at = entry.atividades||[]; const issues=[];
@@ -814,7 +905,7 @@ function summarize(entry){
   const tipos = [...new Set((entry.atividades||[]).map(a=>a.tipologia).filter(Boolean))];
   const conds = (entry.atividades||[]).map(a=>a.condicionante_risco).filter(Boolean);
   const risk  = aggregateRisk(entry.atividades||[]);
-  const riskSet = new Set(risk.split('/'));
+  const riskSet = new Set(risk.split('/').map(x=>x.trim()).filter(x=> x==='I' || x==='II' || x==='III'));
   const riskLabel = risk;
   const issues= detectIssues(entry);
   return {diretorias: diret, tipologias: tipos, conds, risk: riskLabel, riskSet, issues};
@@ -865,10 +956,34 @@ function rebuildFilters() {
 
 
 function riskPill(r){
-  if (r === '—') return '<span class="muted">—</span>';
-  const parts = String(r||'').split('/').filter(Boolean);
-  const pill = (x)=> x==='I' ? '<span class="pill lvl-1">I</span>' : (x==='II' ? '<span class="pill lvl-2">II</span>' : (x==='III' ? '<span class="pill lvl-3">III</span>' : `<span class="pill">${escapeHtml(x)}</span>`));
+  const parts = toStr(r).split('/').map(p=>p.trim()).filter(Boolean);
+  if(parts.length===0) return '<span class="muted">-</span>';
+  const pill = (x)=>{
+    if(x==='I') return '<span class="pill lvl-1">I</span>';
+    if(x==='II') return '<span class="pill lvl-2">II</span>';
+    if(x==='III') return '<span class="pill lvl-3">III</span>';
+    if(x==='NA') return '<span class="pill" style="background: rgba(var(--border), .08); color: rgba(var(--muted-rgb), .95);">NA</span>';
+    return `<span class="pill">${escapeHtml(x)}</span>`;
+  };
   return parts.map(pill).join('');
+}
+function renderMatrixCell(code, riskLabel){
+  const risks = toStr(riskLabel).split('/').map(p=>p.trim()).filter(Boolean);
+  if(risks.length===0) return '<span class="muted">-</span>';
+  const matrixMap = state.matriz.get(code);
+  if(!matrixMap || !(matrixMap instanceof Map)) return '<span class="muted">-</span>';
+  const parts = [];
+  const seen = new Set();
+  for(const risk of risks){
+    if(risk==='NA' || seen.has(risk)) continue;
+    seen.add(risk);
+    const matrix = matrixMap.get(risk);
+    if(!matrix) continue;
+    const safeMatrix = escapeHtml(matrix).replace(/\n/g, '<br>');
+    parts.push(`<div class="matrix-item" style="display:flex;align-items:center;gap:6px;">${riskPill(risk)}<span>${safeMatrix}</span></div>`);
+  }
+  if(!parts.length) return '<span class="muted">-</span>';
+  return parts.join('');
 }
 
 function renderTable() {
@@ -899,10 +1014,10 @@ function renderTable() {
 
     const frag = document.createDocumentFragment();
     for (const { e, s } of rows) {
-        const baseEntry = state.augmentedBase[e.cnae];
-        const baseRisk = baseEntry ? aggregateRisk(baseEntry.atividades) : 'I';
+        const baseEntry = state.augmentedBase[e.cnae] || state.base[e.cnae];
+        const baseRisk = baseEntry ? aggregateRisk(baseEntry.atividades) : 'NA';
         const currentRisk = s.risk;
-        
+
         const tr = document.createElement('tr');
         if (baseRisk !== currentRisk) {
             tr.classList.add('risk-changed');
@@ -911,12 +1026,18 @@ function renderTable() {
             tr.classList.add('user-modified');
         }
 
+        const diretoriaHtml = s.diretorias.length
+          ? `<div class="chips">${s.diretorias.map(d => `<span class="chip">${escapeHtml(d)}</span>`).join('')}</div>`
+          : '<span class="muted">-</span>';
+        const matrizHtml = renderMatrixCell(e.cnae, currentRisk);
+
         tr.innerHTML = `
             <td><strong>${e.cnae}</strong></td>
             <td>${e.denominacao || '<span class="muted">(sem denominação)</span>'}</td>
-            <td><div class="chips">${s.diretorias.map(d => `<span class="chip">${d}</span>`).join('') || '<span class="muted">—</span>'}</div></td>
+            <td>${diretoriaHtml}</td>
             <td>${riskPill(baseRisk)}</td>
             <td>${riskPill(currentRisk)}</td>
+            <td>${matrizHtml}</td>
             <td><button class="btn" data-edit="${e.cnae}" title="Editar"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></td>`;
         
         tr.addEventListener('click', (ev) => { if (!ev.target.closest('button')) openEdit(e.cnae); });
@@ -933,10 +1054,13 @@ function renderIssuesPanel(){
 
 /* ======= Contagem por CNAE ======= */
 function minRiskLevel(ativs){
-  const levels = (ativs||[]).map(a=> mapRoman[a?.nivel_de_risco] || '').filter(r=> r==='I' || r==='II' || r==='III');
-  if(levels.length===0) return 'I';
+  const normalized = (ativs||[]).map(a=> normalizeRiskLevel(a?.nivel_de_risco)).filter(Boolean);
+  const romanLevels = normalized.filter(r=> r==='I' || r==='II' || r==='III');
+  if(romanLevels.length===0){
+    return normalized.includes('NA') ? 'NA' : '';
+  }
   let best = 'III';
-  for(const r of levels){ if(mapArab[r] < mapArab[best]) best = r; }
+  for(const r of romanLevels){ if(mapArab[r] < mapArab[best]) best = r; }
   return best;
 }
 function countByMinRisk(dataset){
@@ -993,6 +1117,7 @@ function actRow(entry,a,idx){
     <option ${a.nivel_de_risco==='I'?'selected':''}>I</option>
     <option ${a.nivel_de_risco==='II'?'selected':''}>II</option>
     <option ${a.nivel_de_risco==='III'?'selected':''}>III</option>
+    <option ${a.nivel_de_risco==='NA'?'selected':''}>NA</option>
   </select>
   <button class="btn write-action" title="Remover"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`;
   const [dir,cond,tip,sel,btn]=row.querySelectorAll('input,select,button');
@@ -1141,8 +1266,9 @@ async function autoInit(){
   
   const basePromise = tryFetchJSON('cnae.json');
   const revisadoPromise = tryFetchJSON('revisaorisco_atualizado_corrigido.json');
+  const enrichedPromise = tryFetchJSON('revisaorisco_atualizado_corrigido_enriquecido.json');
 
-  const [base, revisado] = await Promise.all([basePromise, revisadoPromise]);
+  const [base, revisado, enriched] = await Promise.all([basePromise, revisadoPromise, enrichedPromise]);
   let baseLoaded = false;
   let revisadoLoaded = false;
 
@@ -1161,6 +1287,8 @@ async function autoInit(){
   } else {
     toast('Aviso: "revisaorisco_atualizado_corrigido.json" não encontrado ou com erro.');
   }
+
+  state.matriz = buildMatrizIndex(enriched);
   
   if (!revisadoLoaded && baseLoaded) {
     state.data = JSON.parse(JSON.stringify(state.base));

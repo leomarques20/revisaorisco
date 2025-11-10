@@ -112,6 +112,38 @@
     .lvl-2{ background: rgba(var(--warn), .18); color: rgb(var(--warn)); }
     .lvl-3{ background: rgba(var(--danger), .18); color: rgb(var(--danger)); }
     .lvl-p{ background: rgba(var(--violet), .18); color: rgb(var(--violet)); }
+
+    .matrix-cell{ display:flex; flex-direction:column; gap:10px; min-width:180px; }
+    .matrix-card{ position:relative; border-radius:14px; border:1px solid rgba(var(--border), .08); background: linear-gradient(135deg, rgba(var(--border), .12), rgba(var(--border), .03)); padding:12px; display:flex; gap:12px; align-items:flex-start; box-shadow: var(--shadow-1); transition: transform .2s ease, box-shadow .2s ease; cursor: help; overflow: visible; }
+    .matrix-card:hover{ transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+    .matrix-card::before{ content:''; position:absolute; top:-32px; right:-28px; width:120px; height:120px; background: radial-gradient(circle at top right, rgba(var(--border), .18), transparent 60%); opacity:.45; pointer-events:none; }
+    .matrix-card[data-risk="I"]{ border-color: rgba(var(--ok), .45); background: linear-gradient(135deg, rgba(var(--ok), .22), rgba(var(--ok), .05)); }
+    .matrix-card[data-risk="II"]{ border-color: rgba(var(--warn), .45); background: linear-gradient(135deg, rgba(var(--warn), .24), rgba(var(--warn), .05)); }
+    .matrix-card[data-risk="III"]{ border-color: rgba(var(--danger), .45); background: linear-gradient(135deg, rgba(var(--danger), .22), rgba(var(--danger), .05)); }
+    [data-theme="light"] .matrix-card{ box-shadow: var(--shadow-1); }
+    .matrix-card-header{ display:flex; align-items:center; flex-shrink:0; }
+    .matrix-card-header .pill{ font-size:11px; padding:4px 9px; }
+    .matrix-card-body{ display:flex; flex-direction:column; gap:6px; flex:1; min-width:0; }
+    .matrix-label{ font-weight:600; font-size:13px; letter-spacing:.2px; color:rgb(var(--fg)); text-transform: uppercase; }
+    .matrix-metrics{ display:flex; flex-wrap:wrap; gap:8px; }
+    .matrix-metric{ display:flex; flex-direction:column; gap:2px; padding:6px 10px; border-radius:10px; border:1px solid rgba(var(--border), .16); background: rgba(var(--modal-bg), .45); min-width:110px; }
+    .matrix-card[data-risk="I"] .matrix-metric{ background: rgba(var(--ok), .18); border-color: rgba(var(--ok), .45); }
+    .matrix-card[data-risk="II"] .matrix-metric{ background: rgba(var(--warn), .18); border-color: rgba(var(--warn), .45); }
+    .matrix-card[data-risk="III"] .matrix-metric{ background: rgba(var(--danger), .18); border-color: rgba(var(--danger), .45); }
+    .metric-label{ font-size:10px; text-transform:uppercase; letter-spacing:.5px; color: rgba(var(--muted-rgb), .85); }
+    .metric-value{ font-size:12px; font-weight:600; color: rgb(var(--fg)); }
+    .matrix-card-hint{ display:none; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color: rgba(var(--muted-rgb), .75); }
+    .matrix-card[data-tooltip] .matrix-card-hint{ display:block; }
+    .matrix-card[data-tooltip]::after{ content: attr(data-tooltip); position:absolute; bottom: calc(100% + 10px); left:12px; padding:10px 12px; border-radius:10px; border:1px solid rgba(var(--border), .12); background: rgba(var(--modal-bg), .95); box-shadow: var(--shadow-2); color: rgb(var(--fg)); font-size:12px; line-height:1.35; white-space:pre-line; opacity:0; transform: translateY(6px); transition: opacity .18s ease, transform .18s ease; pointer-events:none; width:220px; z-index:20; }
+    .matrix-card[data-tooltip]::before{ content:''; position:absolute; bottom: calc(100% + 2px); left:32px; width:10px; height:10px; background: rgba(var(--modal-bg), .95); border-left:1px solid rgba(var(--border), .12); border-top:1px solid rgba(var(--border), .12); transform: rotate(45deg); opacity:0; transition: opacity .18s ease, transform .18s ease; z-index:19; }
+    .matrix-card[data-tooltip]:hover::after, .matrix-card[data-tooltip]:hover::before{ opacity:1; transform: translateY(0); }
+
+    @media (max-width: 960px) {
+      .matrix-cell{ min-width:0; }
+      .matrix-card{ flex-direction:column; align-items:flex-start; }
+      .matrix-metrics{ width:100%; }
+      .matrix-metric{ flex:1; min-width:0; }
+    }
     
     details summary{ cursor:pointer; font-weight:600; margin:8px 0; list-style-position: inside; }
     .notice{ font-size:13px; color:rgba(var(--muted-rgb), .95); }
@@ -457,7 +489,7 @@ const ensureActivityList = (entry)=>{
   return entry;
 };
 const createEmptyEntry = (code, denominacao='', obs='')=> ensureActivityList({ cnae: toStr(code), denominacao: toStr(denominacao), atividades: [], obs: toStr(obs) });
-function escapeHtml(str){ if(str==null) return ''; return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'); }
+function escapeHtml(str){ if(str==null) return ''; return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'", '&#39;'); }
 async function tryFetchJSON(url){
   try {
     const r = await fetch(url, { cache: 'no-store' });
@@ -967,6 +999,22 @@ function riskPill(r){
   };
   return parts.map(pill).join('');
 }
+function describeMatrix(matrix){
+  const normalized = toStr(matrix).replace(/[×]/g, 'x').replace(/\s+/g, ' ').trim();
+  if(!normalized) return { label:'', tooltip:'', metrics:[] };
+  const parts = normalized.split(/x/i).map(part=>part.trim()).filter(Boolean);
+  const labels = ['Probabilidade', 'Impacto', 'Dimensão'];
+  const metrics = parts.slice(0,3).map((value, idx)=>({
+    label: idx < labels.length ? labels[idx] : `Dimensão ${idx+1}`,
+    value
+  }));
+  const tooltip = metrics.length ? metrics.map(m=>`${m.label}: ${m.value}`).join('\n') : normalized;
+  return {
+    label: normalized.replace(/x/gi, '×'),
+    tooltip,
+    metrics
+  };
+}
 function renderMatrixCell(code, riskLabel){
   const risks = toStr(riskLabel).split('/').map(p=>p.trim()).filter(Boolean);
   if(risks.length===0) return '<span class="muted">-</span>';
@@ -975,15 +1023,21 @@ function renderMatrixCell(code, riskLabel){
   const parts = [];
   const seen = new Set();
   for(const risk of risks){
-    if(risk==='NA' || seen.has(risk)) continue;
-    seen.add(risk);
-    const matrix = matrixMap.get(risk);
+    const normalizedRisk = normalizeRiskLevel(risk);
+    if(!normalizedRisk || normalizedRisk==='NA' || seen.has(normalizedRisk)) continue;
+    seen.add(normalizedRisk);
+    const matrix = matrixMap.get(normalizedRisk);
     if(!matrix) continue;
-    const safeMatrix = escapeHtml(matrix).replace(/\n/g, '<br>');
-    parts.push(`<div class="matrix-item" style="display:flex;align-items:center;gap:6px;">${riskPill(risk)}<span>${safeMatrix}</span></div>`);
+    const details = describeMatrix(matrix);
+    if(!details.label) continue;
+    const metricsHtml = details.metrics.length
+      ? `<div class="matrix-metrics">${details.metrics.map(m=> `<span class="matrix-metric"><span class="metric-label">${escapeHtml(m.label)}</span><span class="metric-value">${escapeHtml(m.value)}</span></span>`).join('')}</div>`
+      : '';
+    const tooltipAttr = details.tooltip ? ` data-tooltip="${escapeHtml(details.tooltip).replace(/\n/g, '&#10;')}"` : '';
+    parts.push(`<div class="matrix-card" data-risk="${escapeHtml(normalizedRisk)}"${tooltipAttr}><div class="matrix-card-header">${riskPill(normalizedRisk)}</div><div class="matrix-card-body"><div class="matrix-label">${escapeHtml(details.label)}</div>${metricsHtml}${details.metrics.length?'<span class="matrix-card-hint">Passe o cursor para ver detalhes</span>':''}</div></div>`);
   }
   if(!parts.length) return '<span class="muted">-</span>';
-  return parts.join('');
+  return `<div class="matrix-cell">${parts.join('')}</div>`;
 }
 
 function renderTable() {
